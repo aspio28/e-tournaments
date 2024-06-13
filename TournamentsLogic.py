@@ -1,15 +1,19 @@
 from abc import ABC, abstractmethod
 import random
 class Board:
+
     def __init__ (self):
         self.board = [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]]
+
+    def __getitem__(self,key):
+        return self.board[key]
 
 class TicTacToe:
     def __init__ (self,player1, player2):
         self.board = Board()
         self.players = [player1,player2]
         self.turn = 0
-        self.play   
+        self.play = []
     
     def Ended(self):
 
@@ -28,7 +32,7 @@ class TicTacToe:
             return True
         
         for i in range(2):
-            if i_winner(i):
+            if i_winner(self,i):
                 self.winner = self.players[i]
                 return True
             
@@ -37,13 +41,14 @@ class TicTacToe:
     def Run(self):
         ended= False
         while not ended:
-
-            self.play.append(self.players[self.turn].Play(self.board,self.turn))  
-
+            move  = self.players[self.turn].Move(self.board,self.turn)
+            #TODO Check if the player is cheating
+            self.play.append(move)  
+            self.board[move[0]][move[1]]= move [2]
             self.turn+=1
             if self.turn == 2:
                 self.turn = 0
-        
+            
             ended = TicTacToe.Ended(self)
             
 class Player(ABC):
@@ -60,4 +65,10 @@ class RandomPlayer(Player):
             i = random.randint(0,2)
             j = random.randint(0,2)
             if board[i][j] == -1:
-                return (move,i,j)
+                return i,j,move
+
+pepe = RandomPlayer("Pepe")
+ramon = RandomPlayer("Ramon")
+fight = TicTacToe(pepe,ramon)
+fight.Run()
+print(fight.play)
