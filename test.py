@@ -1,8 +1,9 @@
 from TournamentsLogic import *
 
-player_list = [RandomPlayer("Niley"),RandomPlayer("EsMolesta"),RandomPlayer("MuyMolesta"),RandomPlayer("YHormonal")]
+player_list = [GreedyPlayer("Dun"),RandomPlayer("geon"),GreedyPlayer("Bor"),RandomPlayer("n")]
 
-NileyTournament = KnockoutTournament(True,players=player_list)
+# NileyTournament = KnockoutTournament(True, players=player_list)
+NileyTournament = FreeForAllTournament(True, players=player_list)
 # last_match = NileyTournament.Run()
 
 # def print_tournament_tree(node:Match, t_id, level=0):
