@@ -7,7 +7,8 @@ from Players import *
 from TicTacToe import *
 
 db_name = "A_db_to_rule_them_all.db"
-db_path = os.path.join(os.path.dirname(__file__), "data", db_name)
+current_dir = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(current_dir, 'data', db_name)
 
             
 class Match(ABC):
