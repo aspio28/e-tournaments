@@ -1,63 +1,89 @@
-import socket
 import pickle
+import socket
+import time
+import random
+from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
 
-def Run():
-    server_address = ('172.18.0.20', 8080)
-    first_input = input("Do you want to create a new tournament? (Y/N)")
-    if first_input == "Y":
+
+class ClientNode:
+    port = 5000
+    str_rep = 'Client'
+    
+    def __init__(self):
+        
+        self.requests = {'ping': send_echo_replay,
+                        'Failed': None,                        
+                        }
+        self.run()
+        
+    def _get_server_node_addr(self):
+        return random.choice(get_from_dns('Server'))
+    
+    def new_tournament(self, type_of_tournament, list_of_players):
+        server_address = self._get_server_node_addr()
+        # begin tournament
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(server_address)
+        
+        request = pickle.dumps(['new_tournament', (type_of_tournament, list_of_players)])
+        all_good, data = send_and_wait_for_answer(request, sock, 10)
+        sock.close()
+        
+        answer = pickle.loads(data)
+        if answer[0] == 'running_tournament':
+            return all_good, answer[1][0]
+        return all_good, None
+        
+    def get_status(self, tournament_id):
+        server_address = self._get_server_node_addr()
+        # begin tournament
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(server_address)
+        print(['tournament_status', (tournament_id,)])
+        request = pickle.dumps(['tournament_status', (tournament_id,)])
+        all_good, data = send_and_wait_for_answer(request, sock, 10)
+        sock.close()
+        
+        answer = pickle.loads(data)
+        print(answer)      
+
+    def run(self):
+        first_input = input("Do you want to create a new tournament? (Y/N)")
+        if first_input == "Y":
+                    
+            type_of_tournament = input("What kind of tournament it will be? (1 = Knockout, 2 = FreeForAll)")
+            
+            if type_of_tournament == "1":
+                type_of_tournament = "Knockout"
+            elif type_of_tournament == "2":
+                type_of_tournament = "FreeForAll"
+            else:
+                print("Invalid value")
+                return
                 
-        type_of_tournament = input("What kind of tournament it will be? (1 = Knockout, 2 = FreeForAll)")
-        
-        if type_of_tournament == "1":
-            type_of_tournament = "Knockout"
-        elif type_of_tournament == "2":
+            amount_of_players = input("How many players there will be: ")
+            
+            try:
+                amount_of_players = int(amount_of_players)
+            except:
+                print("The value of amout of players wasnt valid")
+                return        
+            
+            print("Especify the type of player (random/greedy) and the name , separated by a space. (Each player will be a different input)")   
+                
+            list_of_players = []
+            
+            for i in range(amount_of_players):
+                
+                line = input()
+                type_of_player , name_of_player = line.split()
+                list_of_players.append((type_of_player, name_of_player))
+        elif first_input == "1":
             type_of_tournament = "FreeForAll"
-        else:
-            print("Invalid value")
-            return
-               
-        amount_of_players = input("How many players there will be: ")
-        
-        try:
-            amount_of_players = int(amount_of_players)
-        except:
-            print("The value of amout of players wasnt valid")
-            return        
-        
-        print("Especify the type of player (random/greedy) and the name , separated by a space. (Each player will be a different input)")   
+            list_of_players = [("random","A"),("random","B"),("greedy","C")]
             
-        list_of_players = []
+        all_good, t_id = self.new_tournament(type_of_tournament, list_of_players)
+        time.sleep(10)
+        self.get_status(t_id)
         
-        for i in range(amount_of_players):
-            
-            line = input()
-            type_of_player , name_of_player = line.split()
-            list_of_players.append((type_of_player, name_of_player))
-        
-        package = ("Create new tournament", type_of_tournament, list_of_players)
-        # tournament = tournament_type[type_of_tournaments](True ,players=list_of_players)
-        package = pickle.dumps(package)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect(server_address) #Going to have to change i guess, need to know who it needs to connect
-        
-        sock.sendto(package,server_address)
-
-        # data = sock.recv(1024)
-        # print(data.decode('utf-8'))
-
-        sock.close()
-    elif first_input == "1":
-        package = ("Create new tournament","FreeForAll",[("random","A"),("random","B"),("greedy","C")])
-        
-        package = pickle.dumps(package)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect(server_address) #Going to have to change i guess, need to know who it needs to connect
-        
-        sock.sendto(package,server_address)
-
-        # data = sock.recv(1024)
-        # print(data.decode('utf-8'))
-
-        sock.close()
-        
-Run()
+ClientNode()

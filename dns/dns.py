@@ -30,6 +30,8 @@ class DNSNode:
                 conn, address = self.serverSocket.accept()
                 print('CONNECTED: ', address)
                 self.attend_connection(conn, address)
+        except Exception as er:
+            raise er
         finally:
             self.serverSocket.close()
                    
@@ -77,4 +79,5 @@ class DNSNode:
         except FileNotFoundError:
             print("DNS error. Logs not found")
             return False
-        
+
+DNSNode()

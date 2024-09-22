@@ -25,6 +25,7 @@ class DataBaseNode:
                         'get_tournament': self.get_tournament,
                         'save_tournament': self.save_tournament,
                         'get_tournament_matches': self.get_tournament_matches,
+                        'get_tournament_status': self.get_tournament_status,
                         }
         
         self.address = (server_ip, self.port)
@@ -203,7 +204,7 @@ class DataBaseNode:
         return all_good
     
     def get_tournament(self, arguments: tuple, connection, address):
-        tournament_id_req, tournament_type_req = arguments[0]
+        tournament_id_req, tournament_type_req = arguments
         
         # Load from tournaments table
         query = f'''SELECT id, tournament_type, ended
@@ -228,6 +229,7 @@ class DataBaseNode:
     
     def save_tournament(self, arguments: tuple, connection, address):
         tournament_id, tournament_type, ended = arguments
+        print(arguments)
         insert_rows(self.db_path, 'tournaments', 'id, tournament_type, ended', ((tournament_id, tournament_type, ended),)) [0]
         answer = pickle.dumps(['saved_tournament', tournament_id, self.address])
         all_good = send_to(answer, connection)
@@ -251,5 +253,18 @@ class DataBaseNode:
         all_good = send_to(answer, connection)
         return all_good
     
+    def get_tournament_status(self, arguments: tuple, connection, address):
+        tournament_id = arguments[0]
+        # Load from tournaments table
+        query = f'''SELECT id, tournament_type, ended
+        FROM tournaments
+        WHERE id = {tournament_id}'''
+        record = read_data(self.db_path, query) [0] 
+        id, tournament_type, ended = record
+        ended = bool(ended)
+        answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended), self.address])
+        all_good = send_to(answer, connection)
+        return all_good
+        
 ip_address = input("Insert the node ip-address: ")
 node = DataBaseNode(ip_address)

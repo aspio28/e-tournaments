@@ -2,7 +2,7 @@ import socket
 import time
 import pickle
 
-DNS_ADDRESS = ('172.18.0.1', 5353)
+DNS_ADDRESS = ('172.18.0.250', 5353)
 
 def send_to(payload: bytes, connection: socket.socket):
     buf_size = 2*1024
@@ -72,10 +72,10 @@ def get_from_dns(domain:str):
     request = pickle.dumps(["GET", (domain,)])
     send_to(request, sock)
     data = receive_from(sock, 5)
+    result = pickle.loads(data)
     if not result or len(result) == 0:
         raise ConnectionError("Error while connecting to DNS")
     sock.close()
-    result = pickle.loads(data)
     if result[0] == 'sent_addr':
         return result[1]
 

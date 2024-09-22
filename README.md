@@ -27,5 +27,17 @@ docker run -it --name server1 --net tournament-net --ip 172.18.0.20 -p 8080:8080
 ```bash
 cd minion
 docker build -t minion .
-docker run -it --name minion1 --net tournament-net --ip 172.18.0.30 -p 8020:8020 minion
+docker run -it --name minion1 --net tournament-net --ip 172.18.0.70 -p 8020:8020 minion
+```
+### Database container 
+```bash
+cd database
+docker build -t database .
+docker run -it --name database1 --net tournament-net --ip 172.18.0.120 -p 8040:8040 database
+```
+### DNS container 
+```bash
+cd dns
+docker build -t dns .
+docker run -it --name dns --net tournament-net --ip 172.18.0.250 -p 5353:5353 dns
 ```
