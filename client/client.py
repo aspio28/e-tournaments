@@ -32,9 +32,9 @@ def Run():
             
             line = input()
             type_of_player , name_of_player = line.split()
-            list_of_players.append((type_of_player,name_of_player))
+            list_of_players.append((type_of_player, name_of_player))
         
-        package = ("Create new tournament",type_of_tournament,list_of_players)
+        package = ("Create new tournament", type_of_tournament, list_of_players)
         # tournament = tournament_type[type_of_tournaments](True ,players=list_of_players)
         package = pickle.dumps(package)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

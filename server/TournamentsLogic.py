@@ -1,14 +1,13 @@
 from abc import ABC, abstractmethod
 from collections import deque
 import random, time
+import pickle
+import socket
 import copy
-from sqlite_access import *
+from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
 from Players import *
 from TicTacToe import *
 
-db_name = "A_db_to_rule_them_all.db"
-current_dir = os.path.abspath(os.path.dirname(__file__))
-db_path = os.path.join(current_dir, 'data', db_name)
 
             
 class Match(ABC):
@@ -17,11 +16,11 @@ class Match(ABC):
         pass
    
     @abstractmethod
-    def match_from_db(t_id, m_id):
+    def match_from_db(t_id, m_id, address):
         pass
    
     @abstractmethod
-    def save_to_db(self):
+    def save_to_db(self, address):
         pass
 
     def __str__(self):
@@ -51,35 +50,30 @@ class KnockoutMatch(Match):
     def __repr__(self):
         return self.__str__()
     
-    def match_from_db(t_id, m_id):
-        query = f'''SELECT id, tournament_id, required, ended, player1, player2, winner
-        FROM KnockoutMatches
-        WHERE tournament_id = {t_id} AND id = {m_id}'''
-        record = read_data(db_path, query) [0] # [(7, 6, '', 0, 24, 21)]
+    def match_from_db(t_id, m_id, address):
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(address) # TODO
+        
+        request = pickle.dumps(['get_match', ('KnockoutMatches', t_id, m_id)])
+        all_good, data = send_and_wait_for_answer(request, sock, 4) # [(7, 6, '', 0, 24, 21)]
+        record = pickle.loads(data) [1]
         id, tournament_id, required, ended, player1, player2, winner = record
         required = required.split(',') if required != '' else []
         ended = bool(ended)
         return KnockoutMatch(tournament_id, required, ended, player1, player2, winner, id)
     
-    def save_to_db(self):
+    def save_to_db(self, address):
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(address) # TODO
+        
         # Convert the list of required match IDs to a comma-separated string
         required_str = ','.join(map(str, self.required)) if self.required else ''
-        if self.id == None:
-            matches_columns = [
-                'id INTEGER NOT NULL',
-                'tournament_id INTEGER NOT NULL',
-                'required TEXT NOT NULL',
-                'ended BOOLEAN NOT NULL',
-                'player1 INTEGER',
-                'player2 INTEGER',
-                'winner INTEGER',
-                'PRIMARY KEY (id, tournament_id)',
-                'FOREIGN KEY (tournament_id) REFERENCES tournaments (tournament_id)'
-            ]       
-            create_table(db_path, 'KnockoutMatches', matches_columns)            
-            self.id = insert_rows(db_path, 'KnockoutMatches', 'tournament_id, required, ended, player1, player2, winner', ((self.tournament, required_str, self.ended, self.player1, self.player2, self.winner),)) [0]
-        else:
-            insert_rows(db_path, 'KnockoutMatches', 'id, tournament_id, required, ended, player1, player2, winner', ((self.id, self.tournament, required_str, self.ended, self.player1, self.player2, self.winner),)) [0]
+        request = pickle.dumps(['save_match', ('KnockoutMatches', self.id, (self.tournament, required_str, self.ended, self.player1, self.player2, self.winner))])
+        all_good, data = send_and_wait_for_answer(request, sock, 4)
+        answer = pickle.loads(data)
+        if answer[0] == 'saved_match':
+            self.id = answer[1]
+        
 
 class FreeForAllMatch(Match):
     def __init__(self, tournament_id:int, ended:bool, player1:int, player2:int, winner:int=None, id:int=None):
@@ -97,40 +91,34 @@ class FreeForAllMatch(Match):
     def __repr__(self):
         return self.__str__()
     
-    def match_from_db(t_id, m_id):
-        query = f'''SELECT id, tournament_id, ended, player1, player2, winner
-FROM FreeForAllMatches
-WHERE tournament_id = {t_id} AND id = {m_id}'''
-        record = read_data(db_path, query) [0] # [(7, 6, '', 0, 24, 21)]
+    def match_from_db(t_id, m_id, address):
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(address) # TODO
+        
+        request = pickle.dumps(['get_match', ('FreeForAllMatches', t_id, m_id)])
+        all_good, data = send_and_wait_for_answer(request, sock, 4)
+        record = pickle.loads(data) [1]  # [(7, 6, '', 0, 24, 21)]
         id, tournament_id, ended, player1, player2, winner = record
         ended = bool(ended)
         return FreeForAllMatch(tournament_id, ended, player1, player2, winner, id)
     
-    def save_to_db(self):
-        # Convert the list of required match IDs to a comma-separated string
-        if self.id == None:
-            matches_columns = [
-                'id INTEGER NOT NULL',
-                'tournament_id INTEGER NOT NULL',
-                'ended BOOLEAN NOT NULL',
-                'player1 INTEGER',
-                'player2 INTEGER',
-                'winner INTEGER',
-                'PRIMARY KEY (id, tournament_id)',
-                'FOREIGN KEY (tournament_id) REFERENCES tournaments (tournament_id)'
-            ]       
-            create_table(db_path, 'FreeForAllMatches', matches_columns)            
-            self.id = insert_rows(db_path, 'FreeForAllMatches', 'tournament_id, ended, player1, player2, winner', ((self.tournament, self.ended, self.player1, self.player2, self.winner),)) [0]
-        else:
-            insert_rows(db_path, 'FreeForAllMatches', 'id, tournament_id, ended, player1, player2, winner', ((self.id, self.tournament, self.ended, self.player1, self.player2, self.winner),)) [0]
-
-def get_player_instance(player_id):
-    query = f'''SELECT id, name, player_type
-FROM participants
-WHERE id = {player_id}'''
-    record = read_data(db_path, query) [0] 
-    id, name, player_type = record
-    return player_types[player_type](name)
+    def save_to_db(self, address):
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(address) # TODO
+        
+        request = pickle.dumps(['save_match', ('FreeForAllMatches', self.id, (self.tournament, self.ended, self.player1, self.player2, self.winner))])
+        all_good, data = send_and_wait_for_answer(request, sock, 4)
+        answer = pickle.loads(data)
+        if answer[0] == 'saved_match':
+            self.id = answer[1]
+            
+def get_players_instances(player_ids, address):
+    sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+    sock.connect(address) # TODO
+    request = pickle.dumps(['get_player', (player_ids,)])
+    all_good, data = send_and_wait_for_answer(request, sock, 4)
+    records = pickle.loads(data) [1]
+    return [(player_type, name) for id, name, player_type in records]
             
 class Tournament(ABC):
     @abstractmethod
@@ -145,68 +133,69 @@ class Tournament(ABC):
     def insert_tournament_to_db(self, players:list):
         pass
 
-class BridgeTournament(Tournament):
-    def __init__(self, start:bool, id:int=None, players:list=None):
-        if start:
-            self.insert_tournament_to_db(players)
-            self.players_list = copy.deepcopy(self.players_ids)
-            random.shuffle(self.players_list)
-        self.current_bracket = copy.deepcopy(self.players_list)
-        self.next_bracket = []
-        self.pending = []
-
-    def insert_tournament_to_db(self, players:list):
-        if not os.path.exists(db_path):
-            create_db(db_path)
-        tournaments_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'tournament_type TEXT NOT NULL', 'ended BOOLEAN NOT NULL']
-        create_table(db_path, 'tournaments', tournaments_columns)
-        self.id = insert_rows(db_path, 'tournaments', 'tournament_type, ended', (("bridge",False),)) [0]
-        participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_type TEXT NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
-        create_table(db_path, 'participants', participants_columns)
-        players_tuple = tuple((player.name, player.my_type(), self.id) for player in players)
-        self.players_ids = insert_rows(db_path, 'participants', 'name, player_type, tournament_id', players_tuple)       
-        # print(self.players_ids)
-    
-    def initial_check(self):
-        if len(self.players_list)%2 == 0:
-            return True
-        return False
-    
-    def next_match(self):
-        first = random.randint(0,len(self.current_bracket)-1)
-        second = random.randint(0,len(self.current_bracket)-1)
-        while not first !=second:
-            second = random.randint(0,len(self.current_bracket)-1)
-        self.pending.append((self.current_bracket[first],self.current_bracket[second]))
-        r_second = max(first,second)
-        r_first = min (first,second)
-        return self.current_bracket.pop(r_second) , self.current_bracket.pop(r_first)
-
-    def is_over(self):
-        if len(self.current_bracket)== 0:
-            if len(self.next_bracket)==1:
-                return True
-            self.current_bracket = self.next_bracket
-            self.next_bracket = []
-            return False
-        return False
-
-    def Run(self):
-        ended = False
-        if not self.Initial_check():
-            raise Exception("Invalid")
-        while not ended:
-            next = self.Next_match()
-            TTT = TicTacToe(next[0],next[1]).Run()
-            for i in range(len(self.pending)):
-                if self.pending[i] == (TTT[0],TTT[1]) or self.pending[i] == (TTT[1],TTT[0]):
-                    self.pending.pop(i)
-                    self.next_bracket.append(TTT[2])
-                    break
-            ended = self.is_over()
-        return self.next_bracket[0]
+# class BridgeTournament(Tournament):
+#     def __init__(self, start:bool, id:int=None, players:list=None):
+#         if start:
+#             self.insert_tournament_to_db(players)
+#             self.players_list = copy.deepcopy(self.players_ids)
+#             random.shuffle(self.players_list)
+#         self.current_bracket = copy.deepcopy(self.players_list)
+#         self.next_bracket = []
+#         self.pending = []
+#
+#     def insert_tournament_to_db(self, players:list):
+#         if not os.path.exists(db_path):
+#             create_db(db_path)
+#         tournaments_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'tournament_type TEXT NOT NULL', 'ended BOOLEAN NOT NULL']
+#         create_table(db_path, 'tournaments', tournaments_columns)
+#         self.id = insert_rows(db_path, 'tournaments', 'tournament_type, ended', (("bridge",False),)) [0]
+#         participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_type TEXT NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
+#         create_table(db_path, 'participants', participants_columns)
+#         players_tuple = tuple((player.name, player.my_type(), self.id) for player in players)
+#         self.players_ids = insert_rows(db_path, 'participants', 'name, player_type, tournament_id', players_tuple)       
+#         # print(self.players_ids)
+#
+#     def initial_check(self):
+#         if len(self.players_list)%2 == 0:
+#             return True
+#         return False
+#
+#     def next_match(self):
+#         first = random.randint(0,len(self.current_bracket)-1)
+#         second = random.randint(0,len(self.current_bracket)-1)
+#         while not first !=second:
+#             second = random.randint(0,len(self.current_bracket)-1)
+#         self.pending.append((self.current_bracket[first],self.current_bracket[second]))
+#         r_second = max(first,second)
+#         r_first = min (first,second)
+#         return self.current_bracket.pop(r_second) , self.current_bracket.pop(r_first)
+#
+#     def is_over(self):
+#         if len(self.current_bracket)== 0:
+#             if len(self.next_bracket)==1:
+#                 return True
+#             self.current_bracket = self.next_bracket
+#             self.next_bracket = []
+#             return False
+#         return False
+#
+#     def Run(self):
+#         ended = False
+#         if not self.Initial_check():
+#             raise Exception("Invalid")
+#         while not ended:
+#             next = self.Next_match()
+#             TTT = TicTacToe(next[0],next[1]).Run()
+#             for i in range(len(self.pending)):
+#                 if self.pending[i] == (TTT[0],TTT[1]) or self.pending[i] == (TTT[1],TTT[0]):
+#                     self.pending.pop(i)
+#                     self.next_bracket.append(TTT[2])
+#                     break
+#             ended = self.is_over()
+#         return self.next_bracket[0]
 
 class KnockoutTournament(Tournament):
+    
     def __init__(self, start:bool, id:int=None, players:list=None):
         if start:
             if players == None:
@@ -224,39 +213,28 @@ class KnockoutTournament(Tournament):
             self.players_list = copy.deepcopy(self.players_ids)
             self.load_matches_from_db()
             self.ended = self.last_match.ended
+        self.data_nodes = []
 
     def tournament_type(self):
         return "Knockout"
     
-    def insert_tournament_to_db(self, players:list):
-        if not os.path.exists(db_path):
-            create_db(db_path)
-        # Insert to tournaments table
-        tournaments_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'tournament_type TEXT NOT NULL', 'ended BOOLEAN NOT NULL']
-        create_table(db_path, 'tournaments', tournaments_columns)
-        self.id = insert_rows(db_path, 'tournaments', 'tournament_type, ended', ((self.tournament_type(), False),)) [0]
-        
-        # Insert the players to participants table
-        participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_type TEXT NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
-        create_table(db_path, 'participants', participants_columns)
-        players_tuple = tuple((player.name, player.my_type(), self.id) for player in players)
-        self.players_ids = insert_rows(db_path, 'participants', 'name, player_type, tournament_id', players_tuple)       
-        
-        # Create the matches table
-        matches_columns = [
-            'id INTEGER NOT NULL',
-            'tournament_id INTEGER NOT NULL',
-            'required TEXT NOT NULL',
-            'ended BOOLEAN NOT NULL',
-            'player1 INTEGER',
-            'player2 INTEGER',
-            'winner INTEGER',
-            'PRIMARY KEY (id, tournament_id)',
-            'FOREIGN KEY (tournament_id) REFERENCES tournaments (tournament_id)'
-        ]       
-        create_table(db_path, 'KnockoutMatches', matches_columns)
+    def insert_tournament_to_db(self, players: list):
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(self.data_nodes[0]) # TODO
+
+        request = pickle.dumps(['insert_tournament', (self.tournament_type(), players)])
+        all_good, data = send_and_wait_for_answer(request, sock, 5)
+        decoded = pickle.loads(data) 
+        self.id = decoded[0]
+        self.players_ids = decoded[1]
+        sock.close()
+        return all_good
         
     def create_tournament_tree(self):
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
         match_id_insert = 1
         # Check if the number of players is a power of two
         num_players = len(self.players_list)
@@ -272,7 +250,7 @@ class KnockoutTournament(Tournament):
         for m in matches:
             m.id = match_id_insert
             match_id_insert += 1
-            m.save_to_db()
+            m.save_to_db(self.data_nodes[0])
         self.all_matches = copy.deepcopy(matches)
         # Build the tournament tree
         while len(matches) > 1:
@@ -285,35 +263,38 @@ class KnockoutTournament(Tournament):
             for m in matches:
                 m.id = match_id_insert
                 match_id_insert += 1
-                m.save_to_db()
+                m.save_to_db(self.data_nodes[0])
             self.all_matches += copy.deepcopy(matches)
                 
         self.last_match = matches[0]
         return matches[0]  # Return the root of the tournament tree
     
     def load_tournament_from_id(self):
-        # Load from tournaments table
-        query = f'''SELECT id, tournament_type, ended
-FROM tournaments
-WHERE id = {self.id}'''
-        record = read_data(db_path, query) [0] 
-        id, tournament_type, ended = record
-        if tournament_type != self.tournament_type():
-            raise Exception("Cannot load a tournament that is not knockout.")
-        self.ended = bool(ended)
-        
-        # Load players from the participants table
-        query = f'''SELECT id, tournament_id
-FROM participants
-WHERE tournament_id = {self.id}'''
-        players = read_data(db_path, query)
-        self.players_ids = [t[0] for t in players]
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(self.data_nodes[0]) # TODO
+
+        request = pickle.dumps(['get_tournament', (self.id, self.tournament_type())])
+        all_good, data = send_and_wait_for_answer(request, sock, 5)
+        decoded = pickle.loads(data) 
+        self.id = decoded[0]
+        self.ended = decoded[1]
+        self.players_ids = decoded[2]
+        sock.close()
+        return all_good
         
     def load_matches_from_db(self):
-        query = f'''SELECT id, tournament_id, required, ended, player1, player2, winner
-FROM KnockoutMatches
-WHERE tournament_id = {self.id}'''
-        all_matches = read_data(db_path, query)
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(self.data_nodes[0]) # TODO
+        
+        request = pickle.dumps(['get_tournament_matches', (self.id, self.tournament_type())])
+        all_good, data = send_and_wait_for_answer(request, sock, 5)
+        matches_info = pickle.loads(data) 
+        all_matches = matches_info[1][1]
+        
         matches = []
         matches_dict = {}
         max_id = -1
@@ -334,12 +315,16 @@ WHERE tournament_id = {self.id}'''
                     raise Exception(f"The max index {max_id} is not the last match")
         
         self.last_match = matches_dict[max_id]
+        sock.close()
         return self.last_match  # Return the root of the tournament tree
     
     def find_not_ended(self):
         return self._find_not_ended(self.last_match)
     
     def _find_not_ended(self, root:KnockoutMatch):
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
+            
         queue = deque([(root, 0)])  # Queue for BFS, storing (match, level)
         levels = {}  # To track matches at each level
 
@@ -353,8 +338,8 @@ WHERE tournament_id = {self.id}'''
 
             # Add child matches to the queue if they exist
             if len(current_match.required) == 2:
-                queue.append((KnockoutMatch.match_from_db(self.id, current_match.required[0]), level + 1))
-                queue.append((KnockoutMatch.match_from_db(self.id, current_match.required[1]), level + 1))
+                queue.append((KnockoutMatch.match_from_db(self.id, current_match.required[0], self.data_nodes[0]), level + 1))
+                queue.append((KnockoutMatch.match_from_db(self.id, current_match.required[1], self.data_nodes[0]), level + 1))
 
         # Now check each level from the highest to the lowest
         last_level = []
@@ -393,19 +378,34 @@ WHERE tournament_id = {self.id}'''
         return ended, next_match
         
     def update_all_matches(self):
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
         updated = []
         for match in self.all_matches:
             match:KnockoutMatch
-            updated.append(KnockoutMatch.match_from_db(self.id, match.id))
+            updated.append(KnockoutMatch.match_from_db(self.id, match.id, self.data_nodes[0]))
         self.all_matches = updated
-        self.last_match = KnockoutMatch.match_from_db(self.id, self.last_match.id)
+        self.last_match = KnockoutMatch.match_from_db(self.id, self.last_match.id, self.data_nodes[0])
         
     def is_over(self):
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(self.data_nodes[0]) # TODO
+        
         self.update_all_matches()
         self.ended = self.last_match.ended
+        if self.ended:
+            request = pickle.dumps(['save_tournament', (self.id, self.tournament_type(), self.ended)])
+            all_good, data = send_and_wait_for_answer(request, sock, 4)
+            answer = pickle.loads(data)
+            if answer[0] == 'saved_tournament':
+                self.id = answer[1]
+        sock.close()
         return self.ended    
 
 class FreeForAllTournament(Tournament):
+    
     def __init__(self, start:bool, id:int=None, players:list=None):
         if start:
             if players == None:
@@ -423,38 +423,28 @@ class FreeForAllTournament(Tournament):
             self.players_list = copy.deepcopy(self.players_ids)
             self.load_matches_from_db()
             self.ended = self.is_over()
+        self.data_nodes = []
     
     def tournament_type(self):
         return "FreeForAll"
     
     def insert_tournament_to_db(self, players:list):
-        if not os.path.exists(db_path):
-            create_db(db_path)
-        # Insert to tournaments table
-        tournaments_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'tournament_type TEXT NOT NULL', 'ended BOOLEAN NOT NULL']
-        create_table(db_path, 'tournaments', tournaments_columns)
-        self.id = insert_rows(db_path, 'tournaments', 'tournament_type, ended', ((self.tournament_type(), False),)) [0]
-        
-        # Insert the players to participants table
-        participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_type TEXT NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
-        create_table(db_path, 'participants', participants_columns)
-        players_tuple = tuple((player.name, player.my_type(), self.id) for player in players)
-        self.players_ids = insert_rows(db_path, 'participants', 'name, player_type, tournament_id', players_tuple)       
-        
-        # Create the matches table
-        matches_columns = [
-            'id INTEGER NOT NULL',
-            'tournament_id INTEGER NOT NULL',
-            'ended BOOLEAN NOT NULL',
-            'player1 INTEGER',
-            'player2 INTEGER',
-            'winner INTEGER',
-            'PRIMARY KEY (id, tournament_id)',
-            'FOREIGN KEY (tournament_id) REFERENCES tournaments (tournament_id)'
-        ]     
-        create_table(db_path, 'FreeForAllMatches', matches_columns)
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(self.data_nodes[0]) # TODO
+
+        request = pickle.dumps(['insert_tournament', (self.tournament_type(), players)])
+        all_good, data = send_and_wait_for_answer(request, sock, 5)
+        decoded = pickle.loads(data) 
+        self.id = decoded[0]
+        self.players_ids = decoded[1]
+        sock.close()
+        return all_good
         
     def create_tournament_tree(self):
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
         match_id_insert = 1
         num_players = len(self.players_list)
         if num_players < 2:
@@ -466,32 +456,34 @@ class FreeForAllTournament(Tournament):
         for m in matches:
             m.id = match_id_insert
             match_id_insert += 1
-            m.save_to_db()
+            m.save_to_db(self.data_nodes[0])
         self.all_matches = matches
 
     def load_tournament_from_id(self):
-        # Load from tournaments table
-        query = f'''SELECT id, tournament_type, ended
-FROM tournaments
-WHERE id = {self.id}'''
-        record = read_data(db_path, query) [0] 
-        id, tournament_type, ended = record
-        if tournament_type != self.tournament_type():
-            raise Exception("Cannot load a tournament that is not Free for all.")
-        self.ended = bool(ended)
-        
-        # Load players from the participants table
-        query = f'''SELECT id, tournament_id
-FROM participants
-WHERE tournament_id = {self.id}'''
-        players = read_data(db_path, query)
-        self.players_ids = [t[0] for t in players]
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(self.data_nodes[0]) # TODO
+
+        request = pickle.dumps(['get_tournament', (self.id, self.tournament_type())])
+        all_good, data = send_and_wait_for_answer(request, sock, 5)
+        decoded = pickle.loads(data) 
+        self.id = decoded[0]
+        self.ended = decoded[1]
+        self.players_ids = decoded[2]
+        sock.close()
+        return all_good
     
     def load_matches_from_db(self):
-        query = f'''SELECT id, tournament_id, ended, player1, player2, winner
-FROM FreeForAllMatches
-WHERE tournament_id = {self.id}'''
-        all_matches = read_data(db_path, query)
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(self.data_nodes[0]) # TODO
+        
+        request = pickle.dumps(['get_tournament_matches', (self.id, self.tournament_type())])
+        all_good, data = send_and_wait_for_answer(request, sock, 5)
+        matches_info = pickle.loads(data) 
+        all_matches = matches_info[1][1]
         matches = []
         for record in all_matches:
             id, tournament_id, ended, player1, player2, winner = record
@@ -515,13 +507,20 @@ WHERE tournament_id = {self.id}'''
         return ended, next_match
     
     def update_all_matches(self):
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
         updated = []
         for match in self.all_matches:
             match:FreeForAllMatch
-            updated.append(FreeForAllMatch.match_from_db(self.id, match.id))
+            updated.append(FreeForAllMatch.match_from_db(self.id, match.id, self.data_nodes[0]))
         self.all_matches = updated
     
     def is_over(self):
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
+        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.connect(self.data_nodes[0]) # TODO
+        
         self.update_all_matches()
         for match in self.all_matches:
             match:FreeForAllMatch
@@ -529,6 +528,13 @@ WHERE tournament_id = {self.id}'''
                 self.ended = False
                 return self.ended
         self.ended = True
+        
+        request = pickle.dumps(['save_tournament', (self.id, self.tournament_type(), self.ended)])
+        all_good, data = send_and_wait_for_answer(request, sock, 4)
+        answer = pickle.loads(data)
+        if answer[0] == 'saved_tournament':
+            self.id = answer[1]
+        sock.close()        
         return self.ended
     
     
@@ -541,9 +547,15 @@ match_type = {'Knockout': KnockoutMatch,
             'FreeForAll': FreeForAllTournament}
 
 class Minion():
-    def do_a_match(self,match:Match):
-        player1:Player = get_player_instance(match.player1)
-        player2:Player = get_player_instance(match.player2)
+    def do_a_match(self, match: Match):
+        # TODO instead of receiving a match object, receive the players ids and return the winner id, then the tournament can save to db and so on
+        if len(self.data_nodes) == 0:
+            self.data_nodes = get_from_dns('DataBase')
+        players = get_players_instances([match.player1, match.player2], self.data_nodes[0])
+        type, name = players[0]
+        player1:Player =  player_types[type](name)
+        type, name = players[1]
+        player2:Player = player_types[type](name)
         winner = TicTacToe(player1, player2).Run()[2]
         print(winner)
         if winner == player1:
@@ -552,4 +564,4 @@ class Minion():
             match.winner = match.player2
         else: raise Exception("Un texto si quieres")
         match.ended = True
-        match.save_to_db()
+        match.save_to_db(self.data_nodes[0]) 
