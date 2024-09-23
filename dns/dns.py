@@ -2,6 +2,7 @@ import os
 import time
 import pickle
 import socket
+import multiprocessing
 from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
 
 class DNSNode:
@@ -25,19 +26,33 @@ class DNSNode:
         self.serverSocket.bind(self.address)
         print(f"Listening at {self.address}")
         self.serverSocket.listen(5)
+            
+        self.ttl_checker = multiprocessing.Process(target=self.check_ttl)
+        self.ttl_checker.start()
+        
+        processes = []
         try:
             while True:                
                 conn, address = self.serverSocket.accept()
-                print('CONNECTED: ', address)
-                self.attend_connection(conn, address)
-        except Exception as er:
-            raise er
+                print('Received CONNECTION from: ', address)
+                process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
+                processes.append(process)
+                process.start()
+                # self.handle_connection(conn, address)
         finally:
             self.serverSocket.close()
-                   
-    def attend_connection(self, connection: socket, address):
+            for process in processes:
+                if process.is_alive():
+                    process.terminate()
+                    process.join()
+              
+    def handle_connection(self, connection: socket, address):
         status = False
         received = receive_from(connection, 3)
+        if len(received) == 0:
+            print("Failed request, data not received") 
+            connection.close()
+            return status
         try:
             decoded = pickle.loads(received)
             if self.requests.get(decoded[0]):
@@ -45,14 +60,41 @@ class DNSNode:
                 status = function_to_answer(decoded[1], connection, address)
 
         except Exception as err:
-            print(err, "Failed request") 
+            print(err, ". Failed request ->",decoded[0]) 
             answer = pickle.dumps(['Failed', (None,)])
             send_to(answer, connection)
                  
         finally:
             connection.close()
         return status
-        
+    
+    def check_ttl(self):
+        while True:
+            try:
+                with open(self.address_log, 'rb') as f:
+                    logs = pickle.load(f)
+                
+                for domain, records in logs.items():
+                    for record in records:
+                        if time.time() >= record['added_at'] + record['ttl']:
+                            # Check TTL
+                            if send_ping_to(record['data']):
+                                # Update added_at if ping is successful
+                                record['added_at'] = time.time()
+                            else:
+                                # Remove record if ping fails
+                                logs[domain].remove(record)
+                                print(f"Removed record for {record['data']} from domain {domain} due to failed ping.")
+
+                # Save updated logs
+                with open(self.address_log, 'wb') as f:
+                    pickle.dump(logs, f)
+
+            except Exception as e:
+                print(f"Error in TTL checker: {e}")
+
+            time.sleep(5)  # Check every 5 seconds
+            
     def get_domain(self, arguments: tuple, connection, address):
         with open(self.address_log, 'rb') as f:
             logs = pickle.load(f)
@@ -72,7 +114,19 @@ class DNSNode:
         try:
             with open(self.address_log, 'rb') as f:
                 logs = pickle.load(f)
+                
+            # Check if a record with the same IP already exists
+            for record in logs[domain]:
+                if record['data'] == new_address:
+                    record['ttl'] = ttl
+                    record['added_at'] = time.time()
+                    print(f"Updated TTL and added_at for existing record with IP {new_address} in domain {domain}")
+                    with open(self.address_log, 'wb') as f:
+                        pickle.dump(logs, f)
+                    return True
+            
             logs[domain].append(new_record)
+            print(f"Added new record with IP {new_address} in domain {domain}")
             with open(self.address_log, 'wb') as f:
                 pickle.dump(logs, f)
             return True
