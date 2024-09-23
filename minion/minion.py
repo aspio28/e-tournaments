@@ -1,6 +1,7 @@
 import socket
 import time
 import pickle
+import multiprocessing
 from Players import *
 from TicTacToe import *
 from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
@@ -12,9 +13,23 @@ player_types = {'random': RandomPlayer,
            
 def get_players_instances(player_ids, address):
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
-    sock.connect(address) # TODO
+    sock.connect(address) 
     request = pickle.dumps(['get_player', (player_ids,)])
     all_good, data = send_and_wait_for_answer(request, sock, 4)
+    sock.close()
+    if len(data) == 0:              
+        data_nodes = get_from_dns('DataBase')
+        for addr in data_nodes:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect(addr)
+                all_good, data = send_and_wait_for_answer(request, sock, 10)
+                sock.close()
+                if len(data) != 0:
+                    break
+            except Exception as err:
+                print(err, ". Failed retry after timeout") 
+        
     records = pickle.loads(data) [1]
     return [(player_type, name) for id, name, player_type in records]
 
@@ -43,17 +58,30 @@ class MinionNode:
                     break
             except Exception as err:
                 print(err)    
+            
+        processes = []
         try:
             while True:                
                 conn, address = self.serverSocket.accept()
-                print('CONNECTED: ', address)
-                self.attend_connection(conn, address)
+                print('Received CONNECTION from: ', address)
+                process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
+                processes.append(process)
+                process.start()
+                # self.handle_connection(conn, address)
         finally:
             self.serverSocket.close()
+            for process in processes:
+                if process.is_alive():
+                    process.terminate()
+                    process.join()
               
-    def attend_connection(self, connection: socket, address):
+    def handle_connection(self, connection: socket, address):
         status = False
         received = receive_from(connection, 3)
+        if len(received) == 0:
+            print("Failed request, data not received") 
+            connection.close()
+            return status
         try:
             decoded = pickle.loads(received)
             if self.requests.get(decoded[0]):
@@ -61,7 +89,7 @@ class MinionNode:
                 status = function_to_answer(decoded[1], connection, address)
 
         except Exception as err:
-            print(err, "Failed request") 
+            print(err, ". Failed request ->",decoded[0]) 
             answer = pickle.dumps(['Failed', (None,)])
             send_to(answer, connection)
                  
@@ -81,7 +109,7 @@ class MinionNode:
         type, name = players[1]
         player2:Player = player_types[type](name)
         winner = TicTacToe(player1, player2).Run()[2]
-        print(winner)
+        print(f"{player1} vs {player2} winner {winner}")
         if winner == player1:
             match_winner_id = p1_id
         elif winner == player2:

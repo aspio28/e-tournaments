@@ -1,6 +1,8 @@
 import os
 import pickle
 import socket
+import time
+import multiprocessing
 from sqlite_access import *
 from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
 
@@ -42,17 +44,30 @@ class DataBaseNode:
                     break
             except Exception as err:
                 print(err)    
+            
+        processes = []
         try:
             while True:                
                 conn, address = self.serverSocket.accept()
-                print('CONNECTED: ', address)
-                self.attend_connection(conn, address)
+                print('Received CONNECTION from: ', address)
+                process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
+                processes.append(process)
+                process.start()
+                # self.handle_connection(conn, address)
         finally:
             self.serverSocket.close()
-            
-    def attend_connection(self, connection: socket, address):
+            for process in processes:
+                if process.is_alive():
+                    process.terminate()
+                    process.join()
+              
+    def handle_connection(self, connection: socket, address):
         status = False
         received = receive_from(connection, 3)
+        if len(received) == 0:
+            print("Failed request, data not received") 
+            connection.close()
+            return status
         try:
             decoded = pickle.loads(received)
             if self.requests.get(decoded[0]):
@@ -60,7 +75,7 @@ class DataBaseNode:
                 status = function_to_answer(decoded[1], connection, address)
 
         except Exception as err:
-            print(err, "Failed request") 
+            print(err, ". Failed request ->",decoded[0]) 
             answer = pickle.dumps(['Failed', (None,)])
             send_to(answer, connection)
                  
@@ -126,7 +141,7 @@ class DataBaseNode:
         else: raise Exception(f'Unknown match type {match_type}')
         
         record = read_data(self.db_path, query) [0]
-            
+        time.sleep(8)
         answer = pickle.dumps(['sending_match', record, self.address])
         all_good = send_to(answer, connection)
         return all_good
