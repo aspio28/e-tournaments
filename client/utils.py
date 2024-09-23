@@ -1,6 +1,7 @@
 import socket
 import time
 import pickle
+import multiprocessing
 
 DNS_ADDRESS = ('172.18.0.250', 5353)
 
@@ -37,25 +38,44 @@ def send_to(payload: bytes, connection: socket.socket):
         return True
     return False
 
-def receive_from(connection: socket.socket, wait_time:int):
+def _recv(queue, connection):
+    return_dict = queue.get()
     buf_size = 2*1024
-    attempts = 3
-    i = 0
     data = bytes()
     msg = None
-    while i < attempts:
+    while True:
         msg = connection.recv(buf_size)
         if msg != None:
             data = data + msg
             try:
                 decode = pickle.loads(data)
-                print(F"Received data {decode}")
+                print(f"Received data {decode}")
                 break
             except:
                 pass
-        else:
-            i += 1
-    print(f"Received {len(data)} bytes in {i} attempts, from {connection}")
+    return_dict['data'] = data
+    queue.put(return_dict)
+
+def receive_from(connection: socket.socket, wait_time: int):
+    
+    data = bytes()
+    
+    queue = multiprocessing.Queue()
+    queue.put(dict())
+    # Create a process to receive data
+    process = multiprocessing.Process(target=_recv, args=(queue, connection))  
+    process.start()
+    process.join(wait_time)
+
+    if process.is_alive():
+        print("Timeout occurred!")
+        process.terminate()
+        process.join()
+    if not queue.empty():
+        return_dict = queue.get()
+        data = return_dict.get('data')
+        
+    print(f"Received {len(data)} bytes, from {connection}")
     return data
     
 def send_and_wait_for_answer(payload: bytes, connection: socket.socket, wait_time:int):
