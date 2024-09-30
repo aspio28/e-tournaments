@@ -141,7 +141,6 @@ class DataBaseNode:
         else: raise Exception(f'Unknown match type {match_type}')
         
         record = read_data(self.db_path, query) [0]
-        time.sleep(8)
         answer = pickle.dumps(['sending_match', record, self.address])
         all_good = send_to(answer, connection)
         return all_good

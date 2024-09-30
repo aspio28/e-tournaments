@@ -162,12 +162,10 @@ class ServerNode:
     
     def new_tournament(self, arguments: tuple, connection, address):
         tournament_type, players = arguments 
-        time.sleep(20)
         # players is a list of tuples (player_type, player_name)
         tournament_instance = tournaments_type[tournament_type] (start=True, id=None, players=players)
         request = pickle.dumps(['running_tournament', (tournament_instance.id,)])
         all_good = send_to(request, connection)
-        time.sleep(20)
         
         return self._execute_tournament(tournament_instance)
     
