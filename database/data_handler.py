@@ -36,7 +36,9 @@ class DataBaseNode:
         self.serverSocket.bind(self.address)
         print(f"Listening at {self.address}")
         self.serverSocket.listen(5)
+        self.run()
         
+    def run(self):
         while True:
             try:                    
                 result = send_addr_to_dns(self.str_rep, self.address)
@@ -44,7 +46,7 @@ class DataBaseNode:
                     break
             except Exception as err:
                 print(err)    
-            
+                
         processes = []
         try:
             while True:                
@@ -53,7 +55,8 @@ class DataBaseNode:
                 process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
                 processes.append(process)
                 process.start()
-                # self.handle_connection(conn, address)
+        except Exception as err:
+            print(err)
         finally:
             self.serverSocket.close()
             for process in processes:
@@ -141,7 +144,7 @@ class DataBaseNode:
         else: raise Exception(f'Unknown match type {match_type}')
         
         record = read_data(self.db_path, query) [0]
-        time.sleep(8)
+        # time.sleep(8)
         answer = pickle.dumps(['sending_match', record, self.address])
         all_good = send_to(answer, connection)
         return all_good
@@ -277,7 +280,25 @@ class DataBaseNode:
         record = read_data(self.db_path, query) [0] 
         id, tournament_type, ended = record
         ended = bool(ended)
-        answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended), self.address])
+
+        if tournament_type == 'Knockout':
+            query = f'''SELECT id, tournament_id, required, ended, player1, player2, winner
+            FROM KnockoutMatches
+            WHERE tournament_id = {tournament_id}'''      
+            all_matches = read_data(self.db_path, query)
+        elif tournament_type == 'FreeForAll':
+            query = f'''SELECT id, tournament_id, ended, player1, player2, winner
+            FROM FreeForAllMatches
+            WHERE tournament_id = {tournament_id}''' 
+            all_matches = read_data(self.db_path, query)
+        else: raise Exception(f'Unknown tournament type {tournament_type}')
+        
+        query = f'''SELECT id, name, player_type, tournament_id
+            FROM participants
+            WHERE tournament_id = {tournament_id}'''
+        all_players = read_data(self.db_path, query)
+
+        answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended, all_matches, all_players), self.address])
         all_good = send_to(answer, connection)
         return all_good
         

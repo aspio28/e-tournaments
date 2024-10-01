@@ -15,14 +15,17 @@ def get_players_instances(player_ids, address):
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
     sock.connect(address) 
     request = pickle.dumps(['get_player', (player_ids,)])
+    print(f"Requesting the players id to the database node in {address}")################
     all_good, data = send_and_wait_for_answer(request, sock, 4)
     sock.close()
-    if len(data) == 0:              
+    if len(data) == 0:
+        print("Retrying with all the database nodes")##############                      
         data_nodes = get_from_dns('DataBase')
         for addr in data_nodes:
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.connect(addr)
+                print(f"Requesting the players id to the database node in {addr}")################
                 all_good, data = send_and_wait_for_answer(request, sock, 10)
                 sock.close()
                 if len(data) != 0:
@@ -50,7 +53,9 @@ class MinionNode:
         self.serverSocket.bind(self.address)
         print(f"Listening at {self.address}")
         self.serverSocket.listen(5)
+        self.run()
         
+    def run(self):
         while True:
             try:                    
                 result = send_addr_to_dns(self.str_rep, self.address)
@@ -58,7 +63,7 @@ class MinionNode:
                     break
             except Exception as err:
                 print(err)    
-            
+                
         processes = []
         try:
             while True:                
@@ -67,7 +72,8 @@ class MinionNode:
                 process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
                 processes.append(process)
                 process.start()
-                # self.handle_connection(conn, address)
+        except Exception as err:
+            print(err)
         finally:
             self.serverSocket.close()
             for process in processes:
@@ -113,7 +119,7 @@ class MinionNode:
         if winner == player1:
             match_winner_id = p1_id
         elif winner == player2:
-            match_winner_id = p1_id
+            match_winner_id = p2_id
         else: raise Exception(f"The winner must be one of the players {p1_id}, {p2_id}")
         
         return match_winner_id
@@ -125,29 +131,5 @@ class MinionNode:
         all_good = send_to(request, connection)
         return all_good
             
-ip_address = input("Insert the node ip-address: ")
+ip_address = input("Insert the node ip-address: ")#Range?
 node = MinionNode(ip_address)  
-
-# sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# listen_addr = ("172.18.0.30",8020)
-# sock.bind(listen_addr)
-# sock.listen()
-
-# Stuart = Minion()
-# server_addr = ('172.18.0.20', 8080)
-
-# send_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# send_sock.connect(server_addr) #Going to have to change i guess, need to know who it needs to connect
-# send_sock.sendto(pickle.dumps(("Banana?",listen_addr)),server_addr)
-# send_sock.close()
-
-# while True:
-#     conn, addr = sock.accept()
-#     data = conn.recv(1024)
-#     match = pickle.loads(data)
-    
-#     Stuart.do_a_match(match)
-#     send_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#     send_sock.connect(server_addr) #Going to have to change i guess, need to know who it needs to connect
-#     send_sock.sendto(pickle.dumps("Le Poofe Guacamole"),server_addr)
-#     send_sock.close()

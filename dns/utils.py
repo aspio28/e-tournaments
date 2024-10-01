@@ -57,21 +57,24 @@ def _recv(queue, connection):
     queue.put(return_dict)
 
 def receive_from(connection: socket.socket, wait_time: int):
-    
-    queue = multiprocessing.Queue()
-    queue.put(dict())
-    # Create a process to receive data
-    process = multiprocessing.Process(target=_recv, args=(queue, connection))  
-    process.start()
-    process.join(wait_time)
-
-    if process.is_alive():
-        print("Timeout occurred!")
-        process.terminate()
-        process.join()
-    if not queue.empty():
-        return_dict = queue.get()
-        data = return_dict.get('data')
+    connection.settimeout(wait_time)
+    try:
+        buf_size = 2*1024
+        data = bytes()
+        msg = None
+        while True:
+            msg = connection.recv(buf_size)
+            if msg != None:
+                data = data + msg
+                try:
+                    decode = pickle.loads(data)
+                    print(f"Received data {decode}")
+                    break
+                except:
+                    pass
+    except socket.timeout:
+        print(f"There was a timeout")
+        return "TimeoutError"
         
     print(f"Received {len(data)} bytes, from {connection}")
     return data

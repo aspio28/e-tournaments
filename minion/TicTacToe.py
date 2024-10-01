@@ -39,6 +39,7 @@ class TicTacToe:
     
     def Run(self):
         ended= False
+        tries = 0
         while not ended:
             move  = self.players[self.turn].Move(self.board,self.turn)
             #TODO Check if the player is cheating
@@ -49,9 +50,18 @@ class TicTacToe:
             #     self.turn = 0
             
             ended = TicTacToe.Ended(self)
-        
-        if self.winner == -1: #THIS IS NOT GOOD NEED WORK
-            random_winner = random.randint(0,1)
-            return (self.players[0],self.players[1],self.players[random_winner])
+            
+            tries+=1
+            if self.winner == -1 and ended: #If the match ends in a tie, retry playing it
+                if tries <= 3: #Unless already have been retried 3 times, in that case just pick a random winner cause yolo
+                    random_winner = random.randint(0,1)
+                    return (self.players[0],self.players[1],self.players[random_winner])
+                else:
+                    ended = False
+                    self.board = Board()
+                    self.turn = 0
+                    self.play = []
+                    
+            
 
         return (self.players[0],self.players[1],self.winner)
