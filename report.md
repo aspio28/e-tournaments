@@ -2,8 +2,8 @@
 
 ## Integrantes
 
-- Arian Pazo .. C-4..
-- Jorge Alberto .. C-4..
+- Arian Pazo Valido C-411
+- Jorge Alberto Aspiolea C-411
 
 ## Requerimientos
 
@@ -25,7 +25,7 @@ grupos...etc)
 
 ## Implementación general
 
-No se utiliza ninguna biblioteca que maneje sistemas distribuidos. Todos los procesos de comunicación son a través de sockets y la asincronía y la tolerancia a fallas son con funciones propias que utilizan multiprocessing.
+No se utiliza ninguna biblioteca que maneje sistemas distribuidos. Todos los procesos de comunicación son a través de sockets . La asincronía y la tolerancia a fallas son con funciones propias que utilizan multiprocessing.
 
 En el diseño de el sistema distribuido fueron creado 5 tipos de nodos: dns, database, client, server, minion. Separando así las responsabilidades de forma independiente.
 
