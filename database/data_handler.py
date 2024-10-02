@@ -5,6 +5,7 @@ import time
 import multiprocessing
 from sqlite_access import *
 from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
+import os
 
 class DataBaseNode:
     port = 8040
@@ -13,7 +14,7 @@ class DataBaseNode:
     current_dir = os.path.abspath(os.path.dirname(__file__))
     db_path = os.path.join(current_dir, 'data', db_name)
     
-    def __init__(self, server_ip: str):
+    def __init__(self):
         
         if not os.path.exists(self.db_path):
             create_db(self.db_path)
@@ -30,7 +31,7 @@ class DataBaseNode:
                         'get_tournament_status': self.get_tournament_status,
                         }
         
-        self.address = (server_ip, self.port)
+        self.address = (os.getenv('NODE_IP'), self.port)
         self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.serverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.serverSocket.bind(self.address)
@@ -302,5 +303,4 @@ class DataBaseNode:
         all_good = send_to(answer, connection)
         return all_good
         
-ip_address = input("Insert the node ip-address: ")
-node = DataBaseNode(ip_address)
+node = DataBaseNode()

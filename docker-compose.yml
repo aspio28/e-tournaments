@@ -24,6 +24,8 @@ services:
     tty: true
     volumes:
       - .:/app
+    environment:
+      - NODE_IP=172.30.0.20
 
   node_minion1:
     image: minion
@@ -37,6 +39,8 @@ services:
     tty: true
     volumes:
       - .:/app
+    environment:
+      - NODE_IP=172.30.0.70
 
   node_database1:
     image: database
@@ -50,6 +54,8 @@ services:
     tty: true
     volumes:
       - .:/app
+    environment:
+      - NODE_IP=172.30.0.120
       
 networks:
   tournament-net:
