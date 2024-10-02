@@ -3,7 +3,7 @@ import socket
 import time
 import random
 from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
-
+from Players import random_player_move, greedy_player_move
 
 class ClientNode:
     port = 5000
@@ -150,15 +150,15 @@ class ClientNode:
                 match_dict[match[0]] = {'id': match[0], 't_id': match[1], 'required': match[2], 
                                         'ended': bool(match[3]), 'p1': match[4], 'p2': match[5], 'winner': match[6]}
             # Create a dictionary to store the parent match for each match
-            parent_matches = {id:[] for id in match_dict.keys()}
-            for id, match in match_dict:
+            parent_matches = {id:[] for id in match_dict}
+            for match_id in match_dict:
                 for required_id in match['required']:
                     parent_matches[required_id].append(id)
 
             print_tree(parent_matches, match_dict, all_matches[-1][0])
         elif tournament_type == 'FreeForAll':
             # Create a dictionary to store player wins
-            player_wins = {p_id:0 for p_id in player_dict.keys()}
+            player_wins = {p_id:0 for p_id in player_dict}
             match_dict = {}
             for match in all_matches:
                 new_match = {'id': match[0], 't_id': match[1], 'ended': bool(match[2]), 
@@ -176,7 +176,7 @@ class ClientNode:
             print("    Player     |   Matches Won")
             print("-------------- | ---------------")
             for player_id, wins in sorted_scores:
-                print(f" {player_dict[player_id]['name']}/{player_dict[player_id]['player_type']} |   {wins}")
+                print(f" {player_dict[player_id]['name']} |   {wins}")
 
             # Print match statistics
             ended_matches = sum(1 for match_id in match_dict if match_dict[match_id]['ended'])
