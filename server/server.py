@@ -4,6 +4,7 @@ import time
 import multiprocessing
 from TournamentsLogic import *
 from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
+import os
 
 tournaments_type = {'Knockout': KnockoutTournament,
                    'FreeForAll': FreeForAllTournament}
@@ -12,7 +13,7 @@ class ServerNode:
     port = 8080
     str_rep = 'Server'
     
-    def __init__(self, server_ip: str):
+    def __init__(self):
         
         self.requests = {'ping': send_echo_replay,
                         'Failed': None,
@@ -22,7 +23,7 @@ class ServerNode:
                         }
         self.data_nodes = []
         self.minion_nodes = []
-        self.address = (server_ip, self.port)
+        self.address = (os.getenv('NODE_IP'), self.port)
         self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.serverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.serverSocket.bind(self.address)
@@ -183,5 +184,4 @@ class ServerNode:
         all_good = send_to(answer, connection)
         return all_good
         
-ip_address = input("Insert the node ip-address: ")
-node = ServerNode(ip_address)  
+node = ServerNode()  

@@ -1,0 +1,62 @@
+services:
+  node_dns1:
+    image: dns
+    networks:
+      tournament-net:
+        ipv4_address: 172.30.0.250
+    ports:
+      - "5353:5353"
+    restart: no
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/app
+
+  node_server1:
+    image: server
+    networks:
+      tournament-net:
+        ipv4_address: 172.30.0.20
+    ports:
+      - "8080:8080"
+    restart: no
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/app
+    environment:
+      - NODE_IP=172.30.0.20
+
+  node_minion1:
+    image: minion
+    networks:
+      tournament-net:
+        ipv4_address: 172.30.0.70
+    ports:
+      - "4030:4030"
+    restart: no
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/app
+    environment:
+      - NODE_IP=172.30.0.70
+
+  node_database1:
+    image: database
+    networks:
+      tournament-net:
+        ipv4_address: 172.30.0.120
+    ports:
+      - "8090:8090"
+    restart: no
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/app
+    environment:
+      - NODE_IP=172.30.0.120
+      
+networks:
+  tournament-net:
+    external: true
