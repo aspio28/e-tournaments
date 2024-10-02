@@ -79,6 +79,7 @@ class DNSNode:
                         if time.time() >= record['added_at'] + record['ttl']:
                             # Check TTL
                             if send_ping_to(record['data']):
+                                #TODO Maybe add a print here
                                 # Update added_at if ping is successful
                                 record['added_at'] = time.time()
                             else:

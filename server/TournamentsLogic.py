@@ -95,7 +95,6 @@ class KnockoutMatch(Match):
         answer = pickle.loads(data)
         if answer[0] == 'saved_match':
             self.id = answer[1]
-        
 
 class FreeForAllMatch(Match):
     def __init__(self, tournament_id:int, ended:bool, player1:int, player2:int, winner:int=None, id:int=None):
