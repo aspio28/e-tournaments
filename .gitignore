@@ -1,0 +1,5 @@
+**/__pycache__/
+
+/database/data/A_db_to_rule_them_all.db
+
+/dns/address_log.bin
