@@ -74,7 +74,7 @@ def receive_from(connection: socket.socket, wait_time: int):
                     pass
     except socket.timeout:
         print(f"There was a timeout")
-        return "TimeoutError"
+        return bytes()
         
     print(f"Received {len(data)} bytes, from {connection}")
     return data
