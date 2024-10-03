@@ -90,6 +90,7 @@ class ClientNode:
         for addr in servers:
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(4)
                 sock.connect(addr)
                 all_good, data = send_and_wait_for_answer(request, sock, 10)
                 sock.close()
@@ -108,6 +109,7 @@ class ClientNode:
         print(f"Requesting for a new {type_of_tournament} tournament to be created")
         request = pickle.dumps(['new_tournament', (type_of_tournament, list_of_players)])
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(4)
         sock.connect(server_address)
         all_good, data = send_and_wait_for_answer(request, sock, 10)
         sock.close()
@@ -119,13 +121,14 @@ class ClientNode:
             return all_good, answer[1][0]
         return all_good, None
         
-    def get_status(self, tournament_id):
+    def get_status(self, tournament_id, tournament_name):
         server_address = self._get_server_node_addr()
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(4)
         sock.connect(server_address)
         
-        print(f"Requesting the status of the tournament {self.tourn[tournament_id]}")#['tournament_status', (tournament_id,)]
+        print(f"Requesting the status of the tournament {tournament_name}")#['tournament_status', (tournament_id,)]
         request = pickle.dumps(['tournament_status', (tournament_id,)])
         all_good, data = send_and_wait_for_answer(request, sock, 10)
         sock.close()
@@ -154,7 +157,7 @@ What do you want to do?
         random Juan
         greedy Ana
     """
-            choose_tournament = f"""Insert the name of the Tournament to check. The current Tournaments are: {self.tourn.keys()}
+            choose_tournament = f"""Insert the name of the Tournament to check. The current Tournaments are: {list(self.tourn.keys())}
     """
             choice = input(choice_str)
             if choice in ["1", "2"]:    
@@ -214,7 +217,7 @@ What do you want to do?
                     print("Error, no tournaments created yet.")
                     continue
                 t_name = input(choose_tournament)
-                self.get_status(self.tourn[t_name])
+                self.get_status(self.tourn[t_name], t_name)
                 continue
             elif choice == "6":
                 return
@@ -227,8 +230,7 @@ What do you want to do?
                 print(f"New {type_of_tournament} Tournament created: {tournament_name}")#######
                 self.tourn[tournament_name] = t_id
                 time.sleep(3)
-                # #Small test
-                # self.get_status(t_id)
+                
     
     def _pretty_print_tournament(self, tournament_id, tournament_type, ended, all_matches, all_players):
         player_dict = {}
@@ -238,11 +240,11 @@ What do you want to do?
         if tournament_type == "Knockout":
             def print_tree(parent_matches, match_dict, match_id, level=0):
                 match = match_dict[match_id]
-                print('  ' * level, end='')
+                print('   ' * level, end='')
 
                 # if the match is ended show the winner
                 if match['ended']: 
-                    print(f"Match {match_id}: {player_dict[players[0]]['name']} vs. {player_dict[players[1]]['name']}. Winner {player_dict[match['winner']]['name']}")
+                    print(f"Match {match_id}: {player_dict[match['p1']]['name']} vs. {player_dict[match['p2']]['name']}. Winner {player_dict[match['winner']]['name']}")
                 else:
                     all_played = True
                     players = []
@@ -252,7 +254,7 @@ What do you want to do?
                         else:
                             all_played = False
                     # if all the required matches are ended but this match is not
-                    if all_played:
+                    if all_played and len(match['required']) > 0:
                         print(f"Match {match_id}: Player {player_dict[players[0]]['name']} vs. Player {player_dict[players[1]]['name']}")
                     # if any of the required matches is not ended 
                     else:
@@ -283,7 +285,7 @@ What do you want to do?
             
                 if new_match['ended']:
                     player_wins[new_match['winner']] = player_wins[new_match['winner']] + 1
-            print(match_dict)
+           
             # Create a list of tuples for sorting the table
             sorted_scores = sorted(player_wins.items(), key=lambda item: item[1], reverse=True)
 

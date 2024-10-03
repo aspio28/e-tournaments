@@ -40,44 +40,54 @@ class DataBaseNode:
         
     def run(self):
         while True:
-            try:                    
-                result = send_addr_to_dns(self.str_rep, self.address)
-                if result: 
-                    break
+            while True:
+                try:                    
+                    result = send_addr_to_dns(self.str_rep, self.address)
+                    if result: 
+                        break
+                except Exception as err:
+                    print(err)    
+                    
+            processes = []
+            try:
+                while True:                
+                    conn, address = self.serverSocket.accept()
+                    print('Received CONNECTION from: ', address)
+                    process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
+                    processes.append(process)
+                    process.start()
             except Exception as err:
-                print(err)    
-                
-        processes = []
-        try:
-            while True:                
-                conn, address = self.serverSocket.accept()
-                print('Received CONNECTION from: ', address)
-                process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
-                processes.append(process)
-                process.start()
-        except Exception as err:
-            print(err)
-        finally:
-            self.serverSocket.close()
-            for process in processes:
-                if process.is_alive():
-                    process.terminate()
-                    process.join()
+                print(err)
+            finally:
+                self.serverSocket.close()
+                for process in processes:
+                    if process.is_alive():
+                        process.terminate()
+                        process.join()
               
     def handle_connection(self, connection: socket, address):
         status = False
         received = receive_from(connection, 3)
         if len(received) == 0:
             print("Failed request, data not received") 
-            connection.close()
-            return status
+            im_conn = send_ping_to(DNS_ADDRESS)
+            if not im_conn:
+                connection.close()
+                raise ConnectionError("I'm falling down")
         try:
             decoded = pickle.loads(received)
             if self.requests.get(decoded[0]):
                 function_to_answer = self.requests.get(decoded[0])
                 status = function_to_answer(decoded[1], connection, address)
+                if not status:
+                    im_conn = send_ping_to(DNS_ADDRESS)
+                    if not im_conn:
+                        raise ConnectionError("I'm falling down")
 
         except Exception as err:
+            if str(err) =="I'm falling down":
+                connection.close()
+                raise err
             print(err, ". Failed request ->",decoded[0]) 
             answer = pickle.dumps(['Failed', (None,)])
             send_to(answer, connection)

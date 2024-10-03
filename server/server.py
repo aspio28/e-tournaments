@@ -32,37 +32,41 @@ class ServerNode:
         
     def run(self):
         while True:
-            try:                    
-                result = send_addr_to_dns(self.str_rep, self.address)
-                if result: 
-                    break
+            while True:
+                try:                    
+                    result = send_addr_to_dns(self.str_rep, self.address)
+                    if result: 
+                        break
+                except Exception as err:
+                    print(err)    
+                    
+            processes = []
+            try:
+                while True:                
+                    conn, address = self.serverSocket.accept()
+                    print('Received CONNECTION from: ', address)
+                    process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
+                    processes.append(process)
+                    process.start()
+                    print("yay")
             except Exception as err:
-                print(err)    
-                
-        processes = []
-        try:
-            while True:                
-                conn, address = self.serverSocket.accept()
-                print('Received CONNECTION from: ', address)
-                process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
-                processes.append(process)
-                process.start()
-        except Exception as err:
-            print(err)
-        finally:
-            self.serverSocket.close()
-            for process in processes:
-                if process.is_alive():
-                    process.terminate()
-                    process.join()
+                print("RUN",err)
+            finally:
+                self.serverSocket.close()
+                for process in processes:
+                    if process.is_alive():
+                        process.terminate()
+                        process.join()
               
     def handle_connection(self, connection: socket, address):
         status = False
         received = receive_from(connection, 3)
         if len(received) == 0:
             print("Failed request, data not received") 
-            connection.close()
-            return status
+            im_conn = send_ping_to(DNS_ADDRESS)
+            if not im_conn:
+                connection.close()
+                raise ConnectionError("I'm falling down")
             
         try:
             decoded = pickle.loads(received)
@@ -71,6 +75,9 @@ class ServerNode:
                 status = function_to_answer(decoded[1], connection, address)
 
         except Exception as err:
+            if str(err) =="I'm falling down":
+                connection.close()
+                raise err
             print(err, ". Failed request ->", decoded[0]) 
             answer = pickle.dumps(['Failed', (None,)])
             send_to(answer, connection)
@@ -87,25 +94,33 @@ class ServerNode:
         data_nodes = get_from_dns('DataBase')
         return random.choice(data_nodes)
     
-    def retry_after_timeout(self, request, addresses):
+    def retry_after_timeout(self, request, addresses, wait_answer=True):
         for addr in addresses:
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(4)
                 sock.connect(addr)
-                all_good, data = send_and_wait_for_answer(request, sock, 10)
+                if wait_answer:
+                    all_good, data = send_and_wait_for_answer(request, sock, 6)
+                    if len(data) != 0:
+                        break
+                else:
+                    all_good = send_to(request, sock)
+                    if all_good:
+                        break
                 sock.close()
-                if len(data) != 0:
-                    break
             except Exception as err:
                 print(err, ". Failed retry after timeout") 
                 
-        if len(data) == 0:
-            return False, None
-        return True, data
+        if wait_answer:
+            if len(data) == 0:
+                return False, None
+            return all_good, data
+        return all_good
     
     def _execute_tournament(self, tournament: Tournament):
         ended = False
-            
+        time.sleep(30)
         while not ended:
             ended, match = tournament.next_match()
             match:Match
@@ -117,6 +132,7 @@ class ServerNode:
             request = pickle.dumps(['execute_match', (match.player1, match.player2), self.address])
             
             send_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            send_sock.settimeout(4)
             send_sock.connect(minion_addr)
             
             all_good, data = send_and_wait_for_answer(request, send_sock, 10)
@@ -124,6 +140,10 @@ class ServerNode:
             if len(data) == 0:              
                 minion_nodes = get_from_dns('Minion')
                 all_good, data = self.retry_after_timeout(request, minion_nodes)
+                if not all_good:
+                    im_conn = send_ping_to(DNS_ADDRESS)
+                    if not im_conn:
+                        raise ConnectionError("I'm falling down")
 
             match_winner_id = pickle.loads(data) [1]
             match.ended = True # The database could be optimized removing ended and using the winner as a ended (if winner not None => ended is True)
@@ -133,6 +153,7 @@ class ServerNode:
         tournament.ended = True
         # print('tournament.ended = True')
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        sock.settimeout(4)
         sock.connect(self._get_data_node_addr())
 
         request = pickle.dumps(['save_tournament', (tournament.id, tournament.tournament_type(), tournament.ended)])
@@ -142,6 +163,10 @@ class ServerNode:
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = self.retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
 
         answer = pickle.loads(data)
         if answer[0] == 'saved_tournament':
@@ -155,7 +180,11 @@ class ServerNode:
         tournament_instance = tournaments_type[tournament_type] (start=True, id=None, players=players)
         request = pickle.dumps(['running_tournament', (tournament_instance.id,)])
         all_good = send_to(request, connection)
-        # time.sleep(20)
+        
+        if not all_good:
+            im_conn = send_ping_to(DNS_ADDRESS)
+            if not im_conn:
+                raise ConnectionError("I'm falling down")
         
         return self._execute_tournament(tournament_instance)
 
@@ -170,6 +199,7 @@ class ServerNode:
     def tournament_status(self, arguments: tuple, connection, address):
         tournament_id = arguments[0]
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(4)
         sock.connect(self._get_data_node_addr())
         print(['get_tournament_status', (tournament_id, ), self.address])
         request = pickle.dumps(['get_tournament_status', (tournament_id, ), self.address])
@@ -178,6 +208,10 @@ class ServerNode:
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = self.retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
         tournament_id, tournament_type, ended, all_matches, all_players = pickle.loads(data)[1]
         answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended, all_matches, all_players), self.address])
         all_good = send_to(answer, connection)

@@ -57,19 +57,23 @@ def _recv(queue, connection):
 
 def receive_from(connection: socket.socket, wait_time: int):
     connection.settimeout(wait_time)
-    buf_size = 2*1024
-    data = bytes()
-    msg = None
-    while True:
-        msg = connection.recv(buf_size)
-        if msg != None:
-            data = data + msg
-            try:
-                decode = pickle.loads(data)
-                # print(f"Received data {decode}")
-                break
-            except:
-                pass
+    try:
+        buf_size = 2*1024
+        data = bytes()
+        msg = None
+        while True:
+            msg = connection.recv(buf_size)
+            if msg != None:
+                data = data + msg
+                try:
+                    decode = pickle.loads(data)
+                    # print(f"Received data {decode}")
+                    break
+                except:
+                    pass
+    except socket.timeout:
+        print(f"There was a timeout")
+        return bytes()
         
     # print(f"Received {len(data)} bytes, from {connection}")
     return data

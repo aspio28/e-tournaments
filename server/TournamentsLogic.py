@@ -72,6 +72,10 @@ class KnockoutMatch(Match):
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
         
         record = pickle.loads(data) [1]
         id, tournament_id, required, ended, player1, player2, winner = record
@@ -91,6 +95,10 @@ class KnockoutMatch(Match):
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
             
         answer = pickle.loads(data)
         if answer[0] == 'saved_match':
@@ -123,6 +131,10 @@ class FreeForAllMatch(Match):
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
             
         record = pickle.loads(data) [1]  # [(7, 6, '', 0, 24, 21)]
         id, tournament_id, ended, player1, player2, winner = record
@@ -139,6 +151,10 @@ class FreeForAllMatch(Match):
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
             
         answer = pickle.loads(data)
         if answer[0] == 'saved_match':
@@ -255,6 +271,10 @@ class KnockoutTournament(Tournament):
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
             
         answer = pickle.loads(data) 
         print(answer)
@@ -307,6 +327,10 @@ class KnockoutTournament(Tournament):
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
             
         decoded = pickle.loads(data) 
         self.id = decoded[0]
@@ -324,6 +348,10 @@ class KnockoutTournament(Tournament):
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
             
         matches_info = pickle.loads(data) 
         all_matches = matches_info[1][1]
@@ -428,6 +456,10 @@ class KnockoutTournament(Tournament):
             if len(data) == 0:              
                 data_nodes = get_from_dns('DataBase')
                 all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
                 
             answer = pickle.loads(data)
             if answer[0] == 'saved_tournament':
@@ -474,6 +506,10 @@ class FreeForAllTournament(Tournament):
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
             
         answer = pickle.loads(data) 
         print(answer)
@@ -506,6 +542,10 @@ class FreeForAllTournament(Tournament):
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
             
         decoded = pickle.loads(data) 
         self.id = decoded[0]
@@ -523,6 +563,10 @@ class FreeForAllTournament(Tournament):
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
             
         matches_info = pickle.loads(data) 
         all_matches = matches_info[1][1]
@@ -574,6 +618,10 @@ class FreeForAllTournament(Tournament):
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
+            if not all_good:
+                im_conn = send_ping_to(DNS_ADDRESS)
+                if not im_conn:
+                    raise ConnectionError("I'm falling down")
             
         answer = pickle.loads(data)
         if answer[0] == 'saved_tournament':
