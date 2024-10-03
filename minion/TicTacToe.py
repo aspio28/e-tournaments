@@ -1,4 +1,17 @@
-from Players import *
+import random
+
+class Player:
+    def __init__(self, name, function):
+        self.name = name
+        self.move_function = function
+    
+    def Move(self, board, move):
+        return self.move_function(board, move)
+
+    def __str__(self):
+        return f"{self.name}"
+    def __repr__(self):
+        return f"{self.name}"
 
 class Board:
     def __init__ (self):
@@ -62,6 +75,4 @@ class TicTacToe:
                     self.turn = 0
                     self.play = []
                     
-            
-
         return (self.players[0],self.players[1],self.winner)

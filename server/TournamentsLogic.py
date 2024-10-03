@@ -402,9 +402,9 @@ class KnockoutTournament(Tournament):
             return True , None
         next_match:KnockoutMatch = self.find_not_ended()
         if next_match.player1 == None or next_match.player2 == None:
-            next_match.player1 = KnockoutMatch.match_from_db(self.id, next_match.required[0]).winner
-            next_match.player2 = KnockoutMatch.match_from_db(self.id, next_match.required[1]).winner
-            next_match.save_to_db()
+            next_match.player1 = KnockoutMatch.match_from_db(self.id, next_match.required[0], self.get_data_node_addr()).winner
+            next_match.player2 = KnockoutMatch.match_from_db(self.id, next_match.required[1], self.get_data_node_addr()).winner
+            next_match.save_to_db(self.get_data_node_addr())
         return ended, next_match
         
     def update_all_matches(self):

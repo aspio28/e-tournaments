@@ -152,10 +152,10 @@ class DataBaseNode:
     def add_players(self, arguments: tuple, connection, address):
         tournament_id, players_list  = arguments
         # Insert the players to participants table
-        participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_type TEXT NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
+        participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_code TEXT NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
         create_table(self.db_path, 'participants', participants_columns)
         players_tuple = tuple((player[1], player[0], tournament_id) for player in players_list)
-        players_ids = insert_rows(self.db_path, 'participants', 'name, player_type, tournament_id', players_tuple)       
+        players_ids = insert_rows(self.db_path, 'participants', 'name, player_code, tournament_id', players_tuple)       
         
         answer = pickle.dumps(['added_players', players_ids, self.address])
         all_good = send_to(answer, connection)
@@ -165,7 +165,7 @@ class DataBaseNode:
         player_ids = arguments[0]
         records = []
         for id in player_ids:
-            query = f'''SELECT id, name, player_type
+            query = f'''SELECT id, name, player_code
             FROM participants
             WHERE id = {id}'''
             record = read_data(self.db_path, query) [0] 
@@ -184,10 +184,10 @@ class DataBaseNode:
         tournament_id = insert_rows(self.db_path, 'tournaments', 'tournament_type, ended', ((tournament_type, False),)) [0]
         
         # Insert the players to participants table
-        participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_type TEXT NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
+        participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_code BLOB NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
         create_table(self.db_path, 'participants', participants_columns)
         players_tuple = tuple((player[1], player[0], tournament_id) for player in players_list)
-        players_ids = insert_rows(self.db_path, 'participants', 'name, player_type, tournament_id', players_tuple)       
+        players_ids = insert_rows(self.db_path, 'participants', 'name, player_code, tournament_id', players_tuple)       
         
         # Create the matches table
         if tournament_type == 'Knockout':
@@ -293,7 +293,7 @@ class DataBaseNode:
             all_matches = read_data(self.db_path, query)
         else: raise Exception(f'Unknown tournament type {tournament_type}')
         
-        query = f'''SELECT id, name, player_type, tournament_id
+        query = f'''SELECT id, name, tournament_id
             FROM participants
             WHERE tournament_id = {tournament_id}'''
         all_players = read_data(self.db_path, query)

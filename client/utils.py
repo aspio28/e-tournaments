@@ -1,7 +1,6 @@
 import socket
 import time
 import pickle
-import multiprocessing
 
 DNS_ADDRESS = ('172.18.0.250', 5353)
 
@@ -25,13 +24,13 @@ def send_to(payload: bytes, connection: socket.socket):
                 sent = connection.send(payload[start: end])
                 total_sent += sent
                 start += sent
-                print(f"\nSent {total_sent}/{len(payload)} bytes {connection}")
-            print(f"\nFinished. Sent {total_sent}/{len(payload)} bytes {connection}")
+                # print(f"\nSent {total_sent}/{len(payload)} bytes {connection}")
+            # print(f"\nFinished. Sent {total_sent}/{len(payload)} bytes {connection}")
             all_good = True
             break
         except socket.error as error:
             i += 1
-            print(f"{error} while sending data. Attempt {i} after {sleep_time} ms.")
+            # print(f"{error} while sending data. Attempt {i} after {sleep_time} ms.")
             time.sleep(sleep_time)
             
     if all_good:
@@ -49,7 +48,7 @@ def _recv(queue, connection):
             data = data + msg
             try:
                 decode = pickle.loads(data)
-                print(f"Received data {decode}")
+                # print(f"Received data {decode}")
                 break
             except:
                 pass
@@ -67,12 +66,12 @@ def receive_from(connection: socket.socket, wait_time: int):
             data = data + msg
             try:
                 decode = pickle.loads(data)
-                print(f"Received data {decode}")
+                # print(f"Received data {decode}")
                 break
             except:
                 pass
         
-    print(f"Received {len(data)} bytes, from {connection}")
+    # print(f"Received {len(data)} bytes, from {connection}")
     return data
     
 def send_and_wait_for_answer(payload: bytes, connection: socket.socket, wait_time:int):
