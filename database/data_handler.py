@@ -378,21 +378,15 @@ class DataBaseNode:
             self.pred = node
 
     def fix_fingers(self):
-        for i in range(160): 
-            if id == None:
-                if node.id < self._finger[i].id:
-            #si el nodo entrante es menor que el nodo en cuestion y se puede hacer cargo de ese id, actualizamos
-                    if self._id + (2 ** i) <= node.id:
-                        self._finger[i] = node
-
-            #si el nodo entrante es mayor, pero el nodo en cuestion esta manejando un dato de mayor id que el
-                elif self._finger[i].id < self._id + 2 ** i:
-                    self._finger[i] = node
-        
-        #si el parametro id tiene valor, lo que hacemos es sustituir el nodo entrante x el nodo del id pasado por parametro
-            else:
-                if self._finger[i].id == id:
-                    self._finger[i] = node 
+        while True:
+            try:
+                self.next += 1
+                if self.next >= self.m:
+                    self.next = 0
+                self.finger[self.next] = self.find_succ((self.id + 2 ** self.next) % 2 ** self.m)
+            except Exception as e:
+                print(f"Error in fix_fingers: {e}")
+            time.sleep(10)
 
 
     def check_predecessor(self):
