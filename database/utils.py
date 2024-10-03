@@ -2,8 +2,12 @@ import socket
 import time
 import pickle
 import multiprocessing
+import hashlib
 
 DNS_ADDRESS = ('172.30.0.250', 5353)
+
+def getShaRepr(data: str):
+    return int(hashlib.sha1(data.encode()).hexdigest(),16)
 
 def send_to(payload: bytes, connection: socket.socket):
     buf_size = 2*1024
