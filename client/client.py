@@ -119,6 +119,8 @@ class ClientNode:
         answer = pickle.loads(data)
         if answer[0] == 'running_tournament':
             return all_good, answer[1][0]
+        if answer[0] == 'Failed':
+            return False, None
         return all_good, None
         
     def get_status(self, tournament_id, tournament_name):
@@ -136,6 +138,10 @@ class ClientNode:
            all_good, data = self.retry_after_timeout(request)
         
         answer = pickle.loads(data)
+        
+        if answer[0] == 'Failed':
+            print("Failed get status request")
+            return False
         # print(answer)     
         self._pretty_print_tournament(*answer[1])
 
@@ -161,9 +167,9 @@ What do you want to do?
     """
             choice = input(choice_str)
             if choice in ["1", "2"]:    
-                if type_of_tournament == "1":
+                if choice == "1":
                     type_of_tournament = "Knockout"
-                elif type_of_tournament == "2":
+                elif choice == "2":
                     type_of_tournament = "FreeForAll"
                     
                 tournament_name = input("Enter tournament name: ")
@@ -172,8 +178,6 @@ What do you want to do?
                     random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=5))
                     tournament_name = tournament_name + "_" + random_string
                     print(f"New {type_of_tournament} Tournament name already exists. Using {tournament_name} instead.")
-                
-                self.tourn[tournament_name] = None      
                     
                 amount_of_players = input(players_n_str)
                 try:
@@ -192,31 +196,32 @@ What do you want to do?
                 type_of_tournament = "FreeForAll"
                 random_code = pickle.dumps(player_types["random"])
                 greedy_code = pickle.dumps(player_types["greedy"])
-                list_of_players = [(random_code, "A"), (random_code, "B"), (greedy_code, "C")]
+                list_of_players = [(random_code, "A"), (random_code, "B"), (greedy_code, "C"),(random_code, "D"),(random_code, "E"),(greedy_code, "H")]
                 tournament_name = "preset_FreeForAll"
                 if tournament_name in self.tourn:
                     # Add a random alphanumeric string if name exists
                     random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=5))
                     tournament_name = tournament_name + "_" + random_string
                     print(f"New FreeForAll Tournament name: {tournament_name}")
-                self.tourn[tournament_name] = None      
             elif choice == "4":
                 type_of_tournament = "Knockout"
                 random_code = pickle.dumps(player_types["random"])
                 greedy_code = pickle.dumps(player_types["greedy"])
-                list_of_players = [(random_code, "A"), (random_code, "B"), (greedy_code, "C"), (greedy_code, "D")]
+                list_of_players = [(random_code, "A"), (random_code, "B"), (greedy_code, "C"), (greedy_code, "D"),(random_code, "E"), (random_code, "F"), (greedy_code, "G"), (greedy_code, "H")]
                 tournament_name = "preset_Knockout"
                 if tournament_name in self.tourn:
                     # Add a random alphanumeric string if name exists
                     random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=5))
                     tournament_name = tournament_name + "_" + random_string
-                    print(f"New Knockout Tournament name: {tournament_name}")
-                self.tourn[tournament_name] = None      
+                    print(f"New Knockout Tournament name: {tournament_name}")   
             elif choice == "3":
                 if len(self.tourn.items()) == 0:
                     print("Error, no tournaments created yet.")
                     continue
                 t_name = input(choose_tournament)
+                if not self.tourn.get(t_name, False):
+                    print(f"Invalid Tournament {t_name}")
+                    continue
                 self.get_status(self.tourn[t_name], t_name)
                 continue
             elif choice == "6":
@@ -225,11 +230,19 @@ What do you want to do?
                 print("Invalid value")
                 continue
             
-            all_good, t_id = self.new_tournament(type_of_tournament, list_of_players)
+            try:
+                all_good, t_id = self.new_tournament(type_of_tournament, list_of_players)
+            except Exception as err:
+                print(err, ". Unexpected error ocurred")
+                continue                
+            
             if all_good:
                 print(f"New {type_of_tournament} Tournament created: {tournament_name}")#######
                 self.tourn[tournament_name] = t_id
-                time.sleep(3)
+                time.sleep(2)
+            else:
+                print("Failed create tournament request")
+                
                 
     
     def _pretty_print_tournament(self, tournament_id, tournament_type, ended, all_matches, all_players):

@@ -48,7 +48,7 @@ class ServerNode:
                     process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
                     processes.append(process)
                     process.start()
-                    print("yay")
+                    
             except Exception as err:
                 print("RUN",err)
             finally:
@@ -120,7 +120,7 @@ class ServerNode:
     
     def _execute_tournament(self, tournament: Tournament):
         ended = False
-        time.sleep(30)
+        # time.sleep(30)
         while not ended:
             ended, match = tournament.next_match()
             match:Match
@@ -190,7 +190,9 @@ class ServerNode:
 
     def continue_tournament(self, arguments: tuple, connection, address):
         tournament_type, tournament_id = arguments 
+        print("arguments",arguments)
         tournament_instance = tournaments_type[tournament_type] (start=False, id=tournament_id, players=None)
+        print(f"tournament instance start={False}, id={tournament_id}, players={None}",)
         request = pickle.dumps(['running_tournament', (tournament_instance.id,)])
         all_good = send_to(request, connection)
         
@@ -201,7 +203,6 @@ class ServerNode:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(4)
         sock.connect(self._get_data_node_addr())
-        print(['get_tournament_status', (tournament_id, ), self.address])
         request = pickle.dumps(['get_tournament_status', (tournament_id, ), self.address])
         all_good, data = send_and_wait_for_answer(request, sock, 4)
         sock.close()

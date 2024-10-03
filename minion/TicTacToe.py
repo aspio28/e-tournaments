@@ -35,11 +35,7 @@ class TicTacToe:
             for j in range(3):
                 if (self.board[j][0]== i and self.board[j][1]== i and self.board[j][2]== i) or ((self.board[0][j]== i and self.board[1][j]== i and self.board[2][j]== i)):
                     return True
-            
-        # for row in self.board:
-        #     if not (any(-1 in row)):
-        #         return True
-            
+                    
         if not (any(-1 in row for row in self.board)):
             return True
         
@@ -55,12 +51,16 @@ class TicTacToe:
         tries = 0
         while not ended:
             move  = self.players[self.turn].Move(self.board,self.turn)
-            #TODO Check if the player is cheating
+            
+            if self.board[move[0]][move[1]] != -1:
+                #Cheater alert, the players loses by discualification
+                self.winner = self.players[(self.turn+1)%2]
+                ended = True
+                return (self.players[0],self.players[1],self.winner)
+                           
             self.play.append(move)  
             self.board[move[0]][move[1]]= move [2]
             self.turn = (self.turn+1)%2
-            # if self.turn == 2:
-            #     self.turn = 0
             
             ended = TicTacToe.Ended(self)
             

@@ -333,9 +333,9 @@ class KnockoutTournament(Tournament):
                     raise ConnectionError("I'm falling down")
             
         decoded = pickle.loads(data) 
-        self.id = decoded[0]
-        self.ended = decoded[1]
-        self.players_ids = decoded[2]
+        self.id = decoded[1][0]
+        self.ended = decoded[1][1]
+        self.players_ids = decoded[1][2]
         return all_good
         
     def load_matches_from_db(self):
@@ -548,9 +548,9 @@ class FreeForAllTournament(Tournament):
                     raise ConnectionError("I'm falling down")
             
         decoded = pickle.loads(data) 
-        self.id = decoded[0]
-        self.ended = decoded[1]
-        self.players_ids = decoded[2]
+        self.id = decoded[1][0]
+        self.ended = decoded[1][1]
+        self.players_ids = decoded[1][2]
         return all_good
     
     def load_matches_from_db(self):

@@ -49,7 +49,7 @@ def _recv(queue, connection):
             data = data + msg
             try:
                 decode = pickle.loads(data)
-                print(f"Received data {decode}")
+                #print(f"Received data {decode}")
                 break
             except:
                 pass
@@ -68,7 +68,7 @@ def receive_from(connection: socket.socket, wait_time: int):
                 data = data + msg
                 try:
                     decode = pickle.loads(data)
-                    print(f"Received data {decode}")
+                    #print(f"Received data {decode}")
                     break
                 except:
                     pass
@@ -76,7 +76,7 @@ def receive_from(connection: socket.socket, wait_time: int):
         print(f"There was a timeout")
         return bytes()
         
-    print(f"Received {len(data)} bytes, from {connection}")
+    #print(f"Received {len(data)} bytes, from {connection}")
     return data
     
 def send_and_wait_for_answer(payload: bytes, connection: socket.socket, wait_time:int):
