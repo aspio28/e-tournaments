@@ -41,3 +41,10 @@ cd dns
 docker build -t dns .
 docker run -it --name dns --net tournament-net --ip 172.18.0.250 -p 5353:5353 dns
 ```
+
+docker network disconnect tournament-net <container_name> 
+docker network connect tournament-net <container_name> 
+
+
+TODO implementar en todos los nodos que si detectan error de conexión que indique que están desconectados, entrar en un while true para contactar al dns, y después volver a crear el socket de aceptar requests,
+

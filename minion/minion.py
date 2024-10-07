@@ -1,18 +1,14 @@
 import socket
 import time
-import pickle
+import dill as pickle
 import multiprocessing
-from Players import *
+import os
 from TicTacToe import *
 from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
-import os
- 
-player_types = {'random': RandomPlayer, 
-                'greedy': GreedyPlayer
-                }
            
 def get_players_instances(player_ids, address):
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+    sock.settimeout(4)
     sock.connect(address) 
     request = pickle.dumps(['get_player', (player_ids,)])
     print(f"Requesting the players id to the database node in {address}")################
@@ -24,6 +20,7 @@ def get_players_instances(player_ids, address):
         for addr in data_nodes:
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(4)
                 sock.connect(addr)
                 print(f"Requesting the players id to the database node in {addr}")################
                 all_good, data = send_and_wait_for_answer(request, sock, 10)
@@ -32,9 +29,13 @@ def get_players_instances(player_ids, address):
                     break
             except Exception as err:
                 print(err, ". Failed retry after timeout") 
+        if len(data) == 0:
+            im_conn = send_ping_to(DNS_ADDRESS)
+            if not im_conn:
+                raise ConnectionError("I'm falling down")
         
     records = pickle.loads(data) [1]
-    return [(player_type, name) for id, name, player_type in records]
+    return [(name, pickle.loads(player_code)) for id, name, player_code in records]
 
 class MinionNode:
     port = 8020
@@ -57,37 +58,40 @@ class MinionNode:
         
     def run(self):
         while True:
-            try:                    
-                result = send_addr_to_dns(self.str_rep, self.address)
-                if result: 
-                    break
+            while True:
+                try:                    
+                    result = send_addr_to_dns(self.str_rep, self.address)
+                    if result: 
+                        break
+                except Exception as err:
+                    print(err)    
+                    
+            processes = []
+            try:
+                while True:                
+                    conn, address = self.serverSocket.accept()
+                    print('Received CONNECTION from: ', address)
+                    process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
+                    processes.append(process)
+                    process.start()
             except Exception as err:
-                print(err)    
-                
-        processes = []
-        try:
-            while True:                
-                conn, address = self.serverSocket.accept()
-                print('Received CONNECTION from: ', address)
-                process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
-                processes.append(process)
-                process.start()
-        except Exception as err:
-            print(err)
-        finally:
-            self.serverSocket.close()
-            for process in processes:
-                if process.is_alive():
-                    process.terminate()
-                    process.join()
+                print("RUN",err)
+            finally:
+                self.serverSocket.close()
+                for process in processes:
+                    if process.is_alive():
+                        process.terminate()
+                        process.join()
               
     def handle_connection(self, connection: socket, address):
         status = False
         received = receive_from(connection, 3)
         if len(received) == 0:
             print("Failed request, data not received") 
-            connection.close()
-            return status
+            im_conn = send_ping_to(DNS_ADDRESS)
+            if not im_conn:
+                connection.close()
+                raise ConnectionError("I'm falling down")
         try:
             decoded = pickle.loads(received)
             if self.requests.get(decoded[0]):
@@ -95,6 +99,9 @@ class MinionNode:
                 status = function_to_answer(decoded[1], connection, address)
 
         except Exception as err:
+            if str(err) =="I'm falling down":
+                connection.close()
+                raise err
             print(err, ". Failed request ->",decoded[0]) 
             answer = pickle.dumps(['Failed', (None,)])
             send_to(answer, connection)
@@ -110,12 +117,12 @@ class MinionNode:
     
     def _do_a_match(self, p1_id, p2_id):
         players = get_players_instances([p1_id, p2_id], self._get_data_node_addr())
-        type, name = players[0]
-        player1:Player =  player_types[type](name)
-        type, name = players[1]
-        player2:Player = player_types[type](name)
+        name, fun = players[0]
+        player1 = Player(name, fun)
+        name, fun = players[1]
+        player2 = Player(name, fun)
         winner = TicTacToe(player1, player2).Run()[2]
-        print(f"{player1} vs {player2} winner {winner}")
+        print(f"{player1} vs {player2}. winner {winner}")
         if winner == player1:
             match_winner_id = p1_id
         elif winner == player2:
