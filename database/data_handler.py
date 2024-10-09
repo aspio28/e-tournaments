@@ -7,8 +7,9 @@ import datetime
 import multiprocessing
 
 from sqlite_access import *
-from utils import DNS_ADDRESS, getShaRepr, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
+from utils import DNS_ADDRESS, getShaRepr, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay, in_between
 from chordReference import ChordNodeReference, FIND_PREDECESSOR, FIND_SUCCESSOR, GET_SUCCESSOR, GET_PREDECESSOR, NOTIFY, CHECK_PREDECESSOR, CLOSEST_PRECEDING_FINGER
+from fingerTable import FingerTable
 
 class DataBaseNode:
     port = 8040
@@ -24,8 +25,7 @@ class DataBaseNode:
         self.ref = ChordNodeReference(self.id, self.ip, self.port)
         self.succ = self.ref
         self.pred = None
-        self.finger = [self.ref] * 160
-        self.next = 0
+        self.finger = FingerTable(self)
 
         print('id:', self.id)
         if not os.path.exists(self.db_path):
@@ -48,8 +48,7 @@ class DataBaseNode:
         self.serverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.serverSocket.bind(self.address)
 
-        threading.Thread(target=self.stabilize, daemon=True).start() 
-        threading.Thread(target=self.fix_fingers, daemon=True).start()  
+        threading.Thread(target=self.stabilize, daemon=True).start()
         threading.Thread(target=self.check_predecessor, daemon=True).start()  
         threading.Thread(target=self.start_server, daemon=True).start()
 
@@ -394,29 +393,6 @@ class DataBaseNode:
         answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended, all_matches, all_players), self.address])
         all_good = send_to(answer, connection)
         return all_good
-    
-    def _inbetween(self, k: int, start: int, end: int) -> bool:
-        """Check if k is in the interval (start, end]."""
-        if start < end:
-            return start < k <= end
-        else:  # The interval wraps around 0
-            return start < k or k <= end
-
-    def find_succ(self, id: int) -> 'ChordNodeReference':
-        node = self.find_pred(id)  # Find predecessor of id
-        return node.succ  # Return successor of that node
-
-    def find_pred(self, id: int) -> 'ChordNodeReference':
-        node = self
-        while not self._inbetween(id, node.id, node.succ.id):
-            node = node.closest_preceding_finger(id)
-        return node
-
-    def closest_preceding_finger(self, id: int) -> 'ChordNodeReference':
-        for i in range(self.m - 1, -1, -1):
-            if self.finger[i] and self._inbetween(self.finger[i].id, self.id, id):
-                return self.finger[i]
-        return self.ref
 
     def join(self, node: 'ChordNodeReference'):
         """Join a Chord network using 'node' as an entry point."""
@@ -437,7 +413,7 @@ class DataBaseNode:
                     x = self.succ.pred
                     if x.id != self.id:
                         print(x)
-                        if x and self._inbetween(x.id, self.id, self.succ.id):
+                        if x and in_between(x.id, self.id, self.succ.id):
                             self.succ = x
                         self.succ.notify(self.ref)
             except Exception as e:
@@ -449,16 +425,18 @@ class DataBaseNode:
     def notify(self, node: 'ChordNodeReference'):
         if node.id == self.id:
             pass
-        if not self.pred or self._inbetween(node.id, self.pred.id, self.id):
+        if not self.pred or in_between(node.id, self.pred.id, self.id):
             self.pred = node
+        if self.succ.id == self.id:
+            self.succ = node
 
     def fix_fingers(self):
         while True:
             try:
                 self.next += 1
-                if self.next >= self.m:
+                if self.next >= 160:
                     self.next = 0
-                self.finger[self.next] = self.find_succ((self.id + 2 ** self.next) % 2 ** self.m)
+                self.finger[self.next] = self.finger.find_succ((self.id + 2 ** self.next) % 2 ** self.m)
             except Exception as e:
                 print(f"Error in fix_fingers: {e}")
             time.sleep(10)
@@ -490,10 +468,10 @@ class DataBaseNode:
 
                 if option == FIND_SUCCESSOR:
                     id = int(data[1])
-                    data_resp = self.find_succ(id)
+                    data_resp = self.finger.find_succ(id)
                 elif option == FIND_PREDECESSOR:
                     id = int(data[1])
-                    data_resp = self.find_pred(id)
+                    data_resp = self.finger.find_pred(id)
                 elif option == GET_SUCCESSOR:
                     data_resp = self.succ if self.succ else self.ref
                 elif option == GET_PREDECESSOR:
@@ -506,7 +484,7 @@ class DataBaseNode:
                     pass
                 elif option == CLOSEST_PRECEDING_FINGER:
                     id = int(data[1])
-                    data_resp = self.closest_preceding_finger(id)
+                    data_resp = self.finger.closest_preceding_finger(id)
 
                 if data_resp:
                     response = f'{data_resp.id},{data_resp.ip}'.encode()

@@ -1,14 +1,19 @@
+import time
+import threading
+
 from chordReference import ChordNodeReference
+from data_handler import DataBaseNode
 from utils import in_between
 
 class FingerTable:
-    def __init__(self, node):
+    def __init__(self, node: DataBaseNode):
         self.node = node
         self.m = 160
-        self.table = [self.node] * self.m
+        self.finger = [self.node.ref] * self.m
         self.next = 0
 
-    def init_finger_table(self, node):
+        
+        threading.Thread(target=self.fix_fingers, daemon=True).start()  
 
     # Method to find the successor of a given id
     def find_succ(self, id: int) -> 'ChordNodeReference':
@@ -25,8 +30,17 @@ class FingerTable:
     # Method to find the closest preceding finger of a given id
     def closest_preceding_finger(self, id: int) -> 'ChordNodeReference':
         for i in range(self.m - 1, -1, -1):
-            if self.finger[i] and self._inbetween(self.finger[i].id, self.id, id):
+            if self.finger[i] and in_between(self.finger[i].id, self.id, id):
                 return self.finger[i]
         return self.ref
     
-    def fix_finger
+    def fix_finger(self):
+        while True:
+            try:
+                self.next += 1
+                if self.next >= self.m:
+                    self.next = 0
+                self.finger[self.next] = self.find_succ((self.id + 2 ** self.next) % 2 ** self.m)
+            except Exception as e:
+                print(f"Error in fix_fingers: {e}")
+            time.sleep(10)
