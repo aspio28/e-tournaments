@@ -8,7 +8,7 @@ import multiprocessing
 
 from sqlite_access import *
 from utils import DNS_ADDRESS, getShaRepr, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay, in_between
-from chordReference import ChordNodeReference, FIND_PREDECESSOR, FIND_SUCCESSOR, GET_SUCCESSOR, GET_PREDECESSOR, NOTIFY, CHECK_PREDECESSOR, CLOSEST_PRECEDING_FINGER
+from chordReference import ChordNodeReference
 from fingerTable import FingerTable
 
 class DataBaseNode:
@@ -27,7 +27,6 @@ class DataBaseNode:
         self.pred = None
         self.finger = FingerTable(self)
 
-        print('id:', self.id)
         if not os.path.exists(self.db_path):
             create_db(self.db_path)
         self.requests = {'ping': send_echo_replay,
@@ -41,6 +40,13 @@ class DataBaseNode:
                         'save_tournament': self.save_tournament,
                         'get_tournament_matches': self.get_tournament_matches,
                         'get_tournament_status': self.get_tournament_status,
+                        'find_predecessor': self.finger.find_pred,
+                        'find_successor': self.finger.find_succ,
+                        'get_successor': self.get_succ,
+                        'get_predecessor': self.get_pred,
+                        'closest_preceding_finger': self.finger.closest_preceding_finger,
+                        'check_predecessor': self.check_predecessor
+
                         }
         
         self.address = (self.ip, self.port)
@@ -85,7 +91,7 @@ class DataBaseNode:
                     if process.is_alive():
                         process.terminate()
                         process.join()
-              
+
     def handle_connection(self, connection: socket, address):
         status = False
         received = receive_from(connection, 3)
@@ -451,44 +457,11 @@ class DataBaseNode:
                 self.pred = None
             time.sleep(10)
 
-    def start_server(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind((self.ip, self.port))
-            s.listen(10)
-
-            while True:
-                conn, addr = s.accept()
-                print(f'new connection from {addr}' )
-
-                data = conn.recv(1024).decode().split(',')
-
-                data_resp = None
-                option = int(data[0])
-
-                if option == FIND_SUCCESSOR:
-                    id = int(data[1])
-                    data_resp = self.finger.find_succ(id)
-                elif option == FIND_PREDECESSOR:
-                    id = int(data[1])
-                    data_resp = self.finger.find_pred(id)
-                elif option == GET_SUCCESSOR:
-                    data_resp = self.succ if self.succ else self.ref
-                elif option == GET_PREDECESSOR:
-                    data_resp = self.pred if self.pred else self.ref
-                elif option == NOTIFY:
-                    id = int(data[1])
-                    ip = data[2]
-                    self.notify(ChordNodeReference(id, ip, self.port))
-                elif option == CHECK_PREDECESSOR:
-                    pass
-                elif option == CLOSEST_PRECEDING_FINGER:
-                    id = int(data[1])
-                    data_resp = self.finger.closest_preceding_finger(id)
-
-                if data_resp:
-                    response = f'{data_resp.id},{data_resp.ip}'.encode()
-                    conn.sendall(response)
-                conn.close()
+    def get_succ(self):
+        return self.succ if self.succ else self.ref
+    
+    def get_pred(self):
+        return self.pred if self.pred else self.ref
+    
 
 node = DataBaseNode()
