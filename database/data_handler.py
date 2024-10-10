@@ -56,7 +56,6 @@ class DataBaseNode:
 
         threading.Thread(target=self.stabilize, daemon=True).start()
         threading.Thread(target=self.check_predecessor, daemon=True).start()  
-        threading.Thread(target=self.start_server, daemon=True).start()
 
         print(f"Listening at {self.address}")
         self.serverSocket.listen(5)
