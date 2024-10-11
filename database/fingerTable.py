@@ -1,8 +1,9 @@
 import time
 import threading
+import pickle
 
 from chordReference import ChordNodeReference
-from utils import in_between
+from utils import in_between, send_to
 
 class FingerTable:
     def __init__(self, node):
@@ -15,9 +16,15 @@ class FingerTable:
         threading.Thread(target=self.fix_fingers, daemon=True).start()  
 
     # Method to find the successor of a given id
-    def find_succ(self, id: int) -> 'ChordNodeReference':
+    def find_succ(self, id, connection=None, address=None) -> 'ChordNodeReference':
+        id = int(id)
         node = self.find_pred(id)  # Find predecessor of id
-        return node.succ  # Return successor of that node
+        if connection:
+            answer = pickle.dumps(['successor', (node.succ.id, node.succ.ip)])
+            all_good = send_to(answer, connection)
+            return all_good
+        else:
+            return node.succ  # Return successor of that node
 
     # Method to find the predecessor of a given id
     def find_pred(self, id: int) -> 'ChordNodeReference':
