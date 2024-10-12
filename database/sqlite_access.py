@@ -60,7 +60,7 @@ def create_table(data_base_file_path:str, table_name:str, columns_list:list):
         # print("Successfully Connected to SQLite")
         cursor.execute(create_table_query)
         connection.commit()
-        # print(f"table {table_name} in database OK")
+        print(f"table {table_name} in database OK")
         cursor.close()
     except sqlite3.Error as error:
         print("Error while creating a sqlite table:", error)

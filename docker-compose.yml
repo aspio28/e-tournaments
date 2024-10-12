@@ -10,7 +10,7 @@ services:
     stdin_open: true
     tty: true
     volumes:
-      - .:/app
+      - ./dns:/dns
 
   node_server1:
     image: server
@@ -23,7 +23,7 @@ services:
     stdin_open: true
     tty: true
     volumes:
-      - .:/app
+      - ./server:/server
     environment:
       - NODE_IP=172.30.0.20
 
@@ -38,24 +38,24 @@ services:
     stdin_open: true
     tty: true
     volumes:
-      - .:/app
+      - ./minion:/minion
     environment:
       - NODE_IP=172.30.0.70
 
-  node_database1:
-    image: database
-    networks:
-      tournament-net:
-        ipv4_address: 172.30.0.120
-    ports:
-      - "8090:8090"
-    restart: no
-    stdin_open: true
-    tty: true
-    volumes:
-      - .:/app
-    environment:
-      - NODE_IP=172.30.0.120
+  # node_database1:
+  #   image: database
+  #   networks:
+  #     tournament-net:
+  #       ipv4_address: 172.30.0.120
+  #   ports:
+  #     - "8090:8090"
+  #   restart: no
+  #   stdin_open: true
+  #   tty: true
+  #   volumes:
+  #     - ./database:/database
+  #   environment:
+  #     - NODE_IP=172.30.0.120
       
 networks:
   tournament-net:

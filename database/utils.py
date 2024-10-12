@@ -2,6 +2,7 @@ import socket
 import time
 import pickle
 import multiprocessing
+import hashlib
 
 DNS_ADDRESS = ('172.30.0.250', 5353)
 
@@ -130,3 +131,12 @@ def send_echo_replay(arguments, connection:socket.socket, address):
     answer = pickle.dumps(['ECHO', (None,)])
     all_good = send_to(answer, connection)
     return all_good
+
+def getShaRepr(data: str):
+    return int(hashlib.sha1(data.encode()).hexdigest(),16)
+
+def in_between(k: int, start: int, end: int) -> bool:
+        if start < end:
+            return start < k <= end
+        else:  # The interval wraps around 0
+            return start < k or k <= end

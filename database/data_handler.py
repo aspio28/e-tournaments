@@ -2,11 +2,14 @@ import os
 import pickle
 import socket
 import time
+import threading
 import datetime
 import multiprocessing
+
 from sqlite_access import *
-from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
-import os
+from utils import DNS_ADDRESS, getShaRepr, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay, in_between
+from chordReference import ChordNodeReference
+from fingerTable import FingerTable
 
 class DataBaseNode:
     port = 8040
@@ -14,9 +17,16 @@ class DataBaseNode:
     db_name = "A_db_to_rule_them_all.db" # TODO name unique for each node
     current_dir = os.path.abspath(os.path.dirname(__file__))
     db_path = os.path.join(current_dir, 'data', db_name)
-    
+    ip = os.getenv('NODE_IP')
+
     def __init__(self):
         
+        self.id = getShaRepr(self.ip)
+        self.ref = ChordNodeReference(self.ip, self.port)
+        self.succ = self.ref
+        self.pred = None
+        self.finger = FingerTable(self)
+
         if not os.path.exists(self.db_path):
             create_db(self.db_path)
         self.requests = {'ping': send_echo_replay,
@@ -30,17 +40,28 @@ class DataBaseNode:
                         'save_tournament': self.save_tournament,
                         'get_tournament_matches': self.get_tournament_matches,
                         'get_tournament_status': self.get_tournament_status,
+                        'find_predecessor': self.finger.find_pred,
+                        'find_successor': self.finger.find_succ,
+                        'get_successor': self.get_succ,
+                        'get_predecessor': self.get_pred,
+                        'closest_preceding_finger': self.finger.closest_preceding_finger,
+                        'check_predecessor': self.check_predecessor,
+                        'notify': self.notify
                         }
         
-        self.address = (os.getenv('NODE_IP'), self.port)
+        self.address = (self.ip, self.port)
         self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.serverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.serverSocket.bind(self.address)
-        print(f"Listening at {self.address}")
-        self.serverSocket.listen(5)
-        self.run()
+
+        threading.Thread(target=self.stabilize, daemon=True).start()
+        # threading.Thread(target=self.check_predecessor, daemon=True).start()  
+        threading.Thread(target=self.run, daemon=True).start()
         
     def run(self):
+        print(f"Listening at {self.address}")
+        self.serverSocket.listen(5)
+
         while True:
             while True:
                 try:                    
@@ -50,26 +71,25 @@ class DataBaseNode:
                 except Exception as err:
                     print(err)    
                     
-            processes = []
-            check_abandoned_tournaments_process = multiprocessing.Process(target=self.check_abandoned_tournaments)
-            processes.append(check_abandoned_tournaments_process)
+            threads = []
+            check_abandoned_tournaments_process = threading.Thread(target=self.check_abandoned_tournaments, daemon=True)
+            threads.append(check_abandoned_tournaments_process)
             check_abandoned_tournaments_process.start()
             try:
-                while True:                
+                while True:            
                     conn, address = self.serverSocket.accept()
                     print('Received CONNECTION from: ', address)
-                    process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
-                    processes.append(process)
-                    process.start()
+                    thread = threading.Thread(target=self.handle_connection, args=(conn, address), daemon=True)
+                    threads.append(thread)
+                    thread.start()
             except Exception as err:
                 print(err)
             finally:
                 self.serverSocket.close()
-                for process in processes:
-                    if process.is_alive():
-                        process.terminate()
-                        process.join()
-              
+                for th in threads:
+                    if th.is_alive():
+                        th.join()
+
     def handle_connection(self, connection: socket, address):
         status = False
         received = receive_from(connection, 3)
@@ -81,6 +101,7 @@ class DataBaseNode:
                 raise ConnectionError("I'm falling down")
         try:
             decoded = pickle.loads(received)
+            print(decoded)
             if self.requests.get(decoded[0]):
                 function_to_answer = self.requests.get(decoded[0])
                 status = function_to_answer(decoded[1], connection, address)
@@ -377,5 +398,79 @@ class DataBaseNode:
         answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended, all_matches, all_players), self.address])
         all_good = send_to(answer, connection)
         return all_good
-        
+
+    def join(self, node: 'ChordNodeReference'):
+        """Join a Chord network using 'node' as an entry point."""
+        if node:
+            self.pred = None
+            self.succ = node.find_successor(self.id)
+            self.pred = self.succ.pred
+            self.succ.notify(self.ref)
+        else:
+            self.succ = self.ref
+            self.pred = None
+
+    def stabilize(self):
+        """Regular check for correct Chord structure."""
+        while True:
+            try:
+                if self.succ.id != self.id:
+                    print('stabilize')
+                    x = self.succ.pred
+                    if x.id != self.id:
+                        print(x)
+                        if x and in_between(x.id, self.id, self.succ.id):
+                            self.succ = x
+                        self.succ.notify(self.ref)
+            except Exception as e:
+                print(f"Error in stabilize: {e}")
+
+            print(f"successor : {self.succ} predecessor {self.pred}")
+            time.sleep(10)
+
+    def notify(self, node: ChordNodeReference, connection=None, address=None):
+        if node.id == self.id:
+            pass
+        if not self.pred or in_between(node.id, self.pred.id, self.id):
+            self.pred = node
+        if self.succ.id == self.id:
+            self.succ = node
+        answer = pickle.dumps(['notified',(None,)])
+        all_good = send_to(answer, connection)
+        return all_good
+
+    def check_predecessor(self, arguments=None, connection=None, address=None):
+        while True:
+            try:
+                if self.pred:
+                    self.pred.check_predecessor()
+            except Exception as e:
+                self.pred = None
+            time.sleep(10)
+
+    def get_succ(self, arguments=None, connection=None, address=None):
+        succ = self.succ if self.succ else self.ref
+        if connection:
+            answer = pickle.dumps(['got_successor', (succ.id, succ.ip)])
+            all_good = send_to(answer, connection)
+            return all_good
+        else:
+            return succ 
+    
+    def get_pred(self, arguments=None, connection=None, address=None):
+        pred = self.pred if self.pred else self.ref
+        if connection:
+            answer = pickle.dumps(['got_predecessor', (pred.id, pred.ip)])
+            all_good = send_to(answer, connection)
+            return all_good
+        else:
+            return pred
+    
+
 node = DataBaseNode()
+ip_node_in_chord = os.getenv('NODE_IN_RED')
+
+if ip_node_in_chord:
+    node.join(ChordNodeReference(ip_node_in_chord, node.port))
+while True: 
+    pass
