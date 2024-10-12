@@ -45,8 +45,8 @@ class DataBaseNode:
                         'get_successor': self.get_succ,
                         'get_predecessor': self.get_pred,
                         'closest_preceding_finger': self.finger.closest_preceding_finger,
-                        'check_predecessor': self.check_predecessor
-
+                        'check_predecessor': self.check_predecessor,
+                        'notify': self.notify
                         }
         
         self.address = (self.ip, self.port)
@@ -55,7 +55,7 @@ class DataBaseNode:
         self.serverSocket.bind(self.address)
 
         threading.Thread(target=self.stabilize, daemon=True).start()
-        threading.Thread(target=self.check_predecessor, daemon=True).start()  
+        # threading.Thread(target=self.check_predecessor, daemon=True).start()  
         threading.Thread(target=self.run, daemon=True).start()
         
     def run(self):
@@ -63,35 +63,32 @@ class DataBaseNode:
         self.serverSocket.listen(5)
 
         while True:
-            # while True:
-            #     try:                    
-            #         result = send_addr_to_dns(self.str_rep, self.address)
-            #         if result: 
-            #             break
-            #     except Exception as err:
-            #         print(err)    
+            while True:
+                try:                    
+                    result = send_addr_to_dns(self.str_rep, self.address)
+                    if result: 
+                        break
+                except Exception as err:
+                    print(err)    
                     
-            processes = []
-            check_abandoned_tournaments_process = multiprocessing.Process(target=self.check_abandoned_tournaments)
-            processes.append(check_abandoned_tournaments_process)
+            threads = []
+            check_abandoned_tournaments_process = threading.Thread(target=self.check_abandoned_tournaments, daemon=True)
+            threads.append(check_abandoned_tournaments_process)
             check_abandoned_tournaments_process.start()
             try:
-                while True:          
-                    if self.pred:
-                        print(self.pred.id)      
+                while True:            
                     conn, address = self.serverSocket.accept()
                     print('Received CONNECTION from: ', address)
-                    process = multiprocessing.Process(target=self.handle_connection, args=(conn, address))
-                    processes.append(process)
-                    process.start()
+                    thread = threading.Thread(target=self.handle_connection, args=(conn, address), daemon=True)
+                    threads.append(thread)
+                    thread.start()
             except Exception as err:
                 print(err)
             finally:
                 self.serverSocket.close()
-                for process in processes:
-                    if process.is_alive():
-                        process.terminate()
-                        process.join()
+                for th in threads:
+                    if th.is_alive():
+                        th.join()
 
     def handle_connection(self, connection: socket, address):
         status = False
@@ -104,10 +101,8 @@ class DataBaseNode:
                 raise ConnectionError("I'm falling down")
         try:
             decoded = pickle.loads(received)
-            if decoded[0] == 'notify':
-                node_ip = decoded[1]
-                status = self.notify(ChordNodeReference(node_ip, self.port), connection, address)
-            elif self.requests.get(decoded[0]):
+            print(decoded)
+            if self.requests.get(decoded[0]):
                 function_to_answer = self.requests.get(decoded[0])
                 status = function_to_answer(decoded[1], connection, address)
                 if not status:
@@ -463,7 +458,6 @@ class DataBaseNode:
             return succ 
     
     def get_pred(self, arguments=None, connection=None, address=None):
-        print(self.pred, 1)
         pred = self.pred if self.pred else self.ref
         if connection:
             answer = pickle.dumps(['got_predecessor', (pred.id, pred.ip)])

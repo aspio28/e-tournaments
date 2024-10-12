@@ -30,7 +30,7 @@ class FingerTable:
     def find_pred(self, id: int) -> 'ChordNodeReference':
         node = self.node
         while not in_between(id, node.id, node.succ.id):
-            node = node.closest_preceding_finger(id)
+            node = self.closest_preceding_finger(id)
         return node
 
     # Method to find the closest preceding finger of a given id

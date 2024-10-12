@@ -48,7 +48,7 @@ class ChordNodeReference:
         return ChordNodeReference(response[1], self.port)
 
     def notify(self, node: 'ChordNodeReference'):
-        request = pickle.dumps(['notify', (node.ip)])
+        request = pickle.dumps(['notify', (node)])
         self._send_data(request)
 
     def check_predecessor(self):
