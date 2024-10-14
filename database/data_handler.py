@@ -63,13 +63,13 @@ class DataBaseNode:
         self.serverSocket.listen(5)
 
         while True:
-            while True:
-                try:                    
-                    result = send_addr_to_dns(self.str_rep, self.address)
-                    if result: 
-                        break
-                except Exception as err:
-                    print(err)    
+            # while True:
+            #     try:                    
+            #         result = send_addr_to_dns(self.str_rep, self.address)
+            #         if result: 
+            #             break
+            #     except Exception as err:
+            #         print(err)    
                     
             threads = []
             check_abandoned_tournaments_process = threading.Thread(target=self.check_abandoned_tournaments, daemon=True)
@@ -413,6 +413,8 @@ class DataBaseNode:
     def stabilize(self):
         """Regular check for correct Chord structure."""
         while True:
+            if self.succ.id != self.id: 
+                print(self.succ.succ)
             try:
                 if self.succ.id != self.id:
                     print('stabilize')
