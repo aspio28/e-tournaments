@@ -10,6 +10,7 @@ from sqlite_access import *
 from utils import DNS_ADDRESS, getShaRepr, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay, in_between
 from chordReference import ChordNodeReference
 from fingerTable import FingerTable
+from succ_list import SuccList
 
 class DataBaseNode:
     port = 8040
@@ -26,6 +27,7 @@ class DataBaseNode:
         self.succ = self.ref
         self.pred = None
         self.finger = FingerTable(self)
+        self.successors = SuccList(3, self)
 
         if not os.path.exists(self.db_path):
             create_db(self.db_path)
@@ -57,19 +59,20 @@ class DataBaseNode:
         threading.Thread(target=self.stabilize, daemon=True).start()
         # threading.Thread(target=self.check_predecessor, daemon=True).start()  
         threading.Thread(target=self.run, daemon=True).start()
+        threading.Thread(target=self.successors.fix_succ, daemon=True).start()
         
     def run(self):
         print(f"Listening at {self.address}")
         self.serverSocket.listen(5)
 
         while True:
-            while True:
-                try:                    
-                    result = send_addr_to_dns(self.str_rep, self.address)
-                    if result: 
-                        break
-                except Exception as err:
-                    print(err)    
+            # while True:
+            #     try:                    
+            #         result = send_addr_to_dns(self.str_rep, self.address)
+            #         if result: 
+            #             break
+            #     except Exception as err:
+            #         print(err)    
                     
             threads = []
             check_abandoned_tournaments_process = threading.Thread(target=self.check_abandoned_tournaments, daemon=True)
@@ -416,6 +419,7 @@ class DataBaseNode:
             try:
                 if self.succ.id != self.id:
                     print('stabilize')
+                    print(self.successors.list)
                     x = self.succ.pred
                     if x.id != self.id:
                         print(x)
