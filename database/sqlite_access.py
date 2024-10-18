@@ -157,3 +157,5 @@ def read_data(data_base_file_path:str, query:str="SELECT * from songs"):
             # print("sqlite connection is closed")
     return record
             
+def get_all_info(data_base_file_path:str):
+    pass
