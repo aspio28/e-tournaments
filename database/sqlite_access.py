@@ -158,4 +158,30 @@ def read_data(data_base_file_path:str, query:str="SELECT * from songs"):
     return record
             
 def get_all_info(data_base_file_path:str):
-    pass
+    try:
+        connection = sqlite3.connect(data_base_file_path)
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tablas = cursor.fetchall()
+
+        datos_db = {}
+
+        for tabla in tablas:
+            nombre_tabla = tabla[0]
+            cursor.execute(f"SELECT * FROM {nombre_tabla}")
+            filas = cursor.fetchall()
+
+            cursor.execute(f"PRAGMA table_info({nombre_tabla});")
+            columnas = [columna[1] for columna in cursor.fetchall()]
+
+            datos_db[nombre_tabla] = [dict(zip(columnas, fila)) for fila in filas]
+
+    except sqlite3.Error as error:
+        print("Failed to obtain data from sqlite table:", error)
+    finally:
+        if connection:
+            connection.close()
+            # print("sqlite connection is closed")
+    
+    return datos_db

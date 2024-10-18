@@ -61,6 +61,24 @@ class ChordNodeReference:
         response = pickle.loads(data)[1]
         return ChordNodeReference(response[1], self.port)
 
+    def ping(self):
+        request = pickle.dumps(['ping', (None,)])
+        data = self._send_data(request)
+        response = pickle.loads(data)[1]
+        return response[0]
+    
+    # def ping(self):
+    #     request = pickle.dumps(['ping', (None,)])
+    #     try:
+    #         socket.setdefaulttimeout(15) 
+    #         data = self._send_data(request)
+    #         response = pickle.loads(data)[1]
+    #         return response[0]
+    #     except Exception as e:
+    #         raise e
+    #     finally:
+    #         socket.setdefaulttimeout(None) 
+
     def __str__(self) -> str:
         return f'{self.id},{self.ip},{self.port}'
 

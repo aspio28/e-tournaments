@@ -48,7 +48,8 @@ class DataBaseNode:
                         'get_predecessor': self.get_pred,
                         'closest_preceding_finger': self.finger.closest_preceding_finger,
                         'check_predecessor': self.check_predecessor,
-                        'notify': self.notify
+                        'notify': self.notify,
+                        'ping': self.ping
                         }
         
         self.address = (self.ip, self.port)
@@ -57,7 +58,7 @@ class DataBaseNode:
         self.serverSocket.bind(self.address)
 
         threading.Thread(target=self.stabilize, daemon=True).start()
-        # threading.Thread(target=self.check_predecessor, daemon=True).start()  
+        threading.Thread(target=self.check_predecessor, daemon=True).start()  
         threading.Thread(target=self.run, daemon=True).start()
         threading.Thread(target=self.successors.fix_succ, daemon=True).start()
         
@@ -66,18 +67,18 @@ class DataBaseNode:
         self.serverSocket.listen(5)
 
         while True:
-            while True:
-                try:                    
-                    result = send_addr_to_dns(self.str_rep, self.address)
-                    if result: 
-                        break
-                except Exception as err:
-                    print(err)    
+            # while True:
+            #     try:                    
+            #         result = send_addr_to_dns(self.str_rep, self.address)
+            #         if result: 
+            #             break
+            #     except Exception as err:
+            #         print(err)    
                     
             threads = []
-            check_abandoned_tournaments_process = threading.Thread(target=self.check_abandoned_tournaments, daemon=True)
-            threads.append(check_abandoned_tournaments_process)
-            check_abandoned_tournaments_process.start()
+            # check_abandoned_tournaments_process = threading.Thread(target=self.check_abandoned_tournaments, daemon=True)
+            # threads.append(check_abandoned_tournaments_process)
+            # check_abandoned_tournaments_process.start()
             try:
                 while True:            
                     conn, address = self.serverSocket.accept()
@@ -94,6 +95,7 @@ class DataBaseNode:
                         th.join()
 
     def handle_connection(self, connection: socket, address):
+
         status = False
         received = receive_from(connection, 3)
         if len(received) == 0:
@@ -277,12 +279,12 @@ class DataBaseNode:
         return all_good
     
     def insert_tournament(self, arguments: tuple, connection, address):
-        tournament_type, players_list  = arguments
-        
+        tournament_type, players_list, tournament_name  = arguments
+        print('name',tournament_name)
         # Insert to tournaments table
-        tournaments_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'tournament_type TEXT NOT NULL', 'ended BOOLEAN NOT NULL', 'last_update DATETIME'] 
+        tournaments_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'tournament_name TEXT NOT NULL', 'tournament_type TEXT NOT NULL', 'ended BOOLEAN NOT NULL', 'last_update DATETIME'] 
         create_table(self.db_path, 'tournaments', tournaments_columns)
-        tournament_id = insert_rows(self.db_path, 'tournaments', 'tournament_type, ended, last_update', ((tournament_type, False, datetime.datetime.now()),)) [0]
+        tournament_id = insert_rows(self.db_path, 'tournaments', 'tournament_name, tournament_type, ended, last_update', ((tournament_name, tournament_type, False, datetime.datetime.now()),)) [0]
         
         # Insert the players to participants table
         participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_code BLOB NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
@@ -417,6 +419,12 @@ class DataBaseNode:
         """Regular check for correct Chord structure."""
         while True:
             try:
+                try:
+                    if self.succ.id != self.id:
+                        self.succ = self.successors.check_succ()
+                except Exception as e:
+                    print(f"Error selecting new successor")
+
                 if self.succ.id != self.id:
                     print('stabilize')
                     print(self.successors.list)
@@ -447,9 +455,12 @@ class DataBaseNode:
         while True:
             try:
                 if self.pred:
-                    self.pred.check_predecessor()
+                    socket.setdefaulttimeout(10) 
+                    ok = self.pred.ping()
             except Exception as e:
                 self.pred = None
+            finally:
+                socket.setdefaulttimeout(None)  
             time.sleep(10)
 
     def get_succ(self, arguments=None, connection=None, address=None):
@@ -470,7 +481,12 @@ class DataBaseNode:
         else:
             return pred
     
+    def ping(self, arguments=None, connection= None, address=None):
+        answer = pickle.dumps(['ping_success', ('OK',)])
+        all_good = send_to(answer, connection)
 
+        return all_good
+    
 node = DataBaseNode()
 ip_node_in_chord = os.getenv('NODE_IN_RED')
 

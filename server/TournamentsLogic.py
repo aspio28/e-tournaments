@@ -236,10 +236,11 @@ class Tournament(ABC):
 
 class KnockoutTournament(Tournament):
     
-    def __init__(self, start:bool, id:int=None, players:list=None):
+    def __init__(self, start:bool, id:int=None, players:list=None, tournament_name:str= None):
         if start:
             if players == None:
                 raise Exception("A tournament to be created needs a players list")
+            self.tournament_name = tournament_name
             self.insert_tournament_to_db(players)
             self.players_list = copy.deepcopy(self.players_ids)
             # random.shuffle(self.players_list)
@@ -253,7 +254,7 @@ class KnockoutTournament(Tournament):
             self.players_list = copy.deepcopy(self.players_ids)
             self.load_matches_from_db()
             self.ended = self.last_match.ended
-
+        
     def tournament_type(self):
         return "Knockout"
     
@@ -265,7 +266,7 @@ class KnockoutTournament(Tournament):
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         sock.connect(self.get_data_node_addr()) # TODO
 
-        request = pickle.dumps(['insert_tournament', (self.tournament_type(), players)])
+        request = pickle.dumps(['insert_tournament', (self.tournament_type(), players, self.tournament_name)])
         all_good, data = send_and_wait_for_answer(request, sock, 5)
         sock.close()
         if len(data) == 0:              
@@ -468,11 +469,12 @@ class KnockoutTournament(Tournament):
 
 class FreeForAllTournament(Tournament):
     
-    def __init__(self, start:bool, id:int=None, players:list=None):
+    def __init__(self, start:bool, id:int=None, players:list=None, tournament_name:str= None):
         self.data_nodes = get_from_dns('DataBase')
         if start:
             if players == None:
                 raise Exception("A tournament to be created needs a players list")
+            self.tournament_name = tournament_name
             self.insert_tournament_to_db(players)
             self.players_list = copy.deepcopy(self.players_ids)
             # random.shuffle(self.players_list)
@@ -500,7 +502,7 @@ class FreeForAllTournament(Tournament):
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         sock.connect(self.get_data_node_addr()) # TODO
 
-        request = pickle.dumps(['insert_tournament', (self.tournament_type(), players)])
+        request = pickle.dumps(['insert_tournament', (self.tournament_type(), players, self.tournament_name)])
         all_good, data = send_and_wait_for_answer(request, sock, 5)
         sock.close()
         if len(data) == 0:              

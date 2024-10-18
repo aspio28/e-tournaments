@@ -103,11 +103,11 @@ class ClientNode:
             return False, None
         return True, data
     
-    def new_tournament(self, type_of_tournament, list_of_players):
+    def new_tournament(self, type_of_tournament, list_of_players, tournament_name):
         server_address = self._get_server_node_addr()
         # begin tournament
         print(f"Requesting for a new {type_of_tournament} tournament to be created")
-        request = pickle.dumps(['new_tournament', (type_of_tournament, list_of_players)])
+        request = pickle.dumps(['new_tournament', (type_of_tournament, list_of_players, tournament_name)])
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(4)
         sock.connect(server_address)
@@ -231,7 +231,7 @@ What do you want to do?
                 continue
             
             try:
-                all_good, t_id = self.new_tournament(type_of_tournament, list_of_players)
+                all_good, t_id = self.new_tournament(type_of_tournament, list_of_players, tournament_name)
             except Exception as err:
                 print(err, ". Unexpected error ocurred")
                 continue                
