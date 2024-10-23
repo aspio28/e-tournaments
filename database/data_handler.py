@@ -106,7 +106,7 @@ class DataBaseNode:
                 raise ConnectionError("I'm falling down")
         try:
             decoded = pickle.loads(received)
-            print(decoded)
+
             if self.requests.get(decoded[0]):
                 function_to_answer = self.requests.get(decoded[0])
                 status = function_to_answer(decoded[1], connection, address)
@@ -280,45 +280,56 @@ class DataBaseNode:
     
     def insert_tournament(self, arguments: tuple, connection, address):
         tournament_type, players_list, tournament_name  = arguments
-        print('name',tournament_name)
-        # Insert to tournaments table
-        tournaments_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'tournament_name TEXT NOT NULL', 'tournament_type TEXT NOT NULL', 'ended BOOLEAN NOT NULL', 'last_update DATETIME'] 
-        create_table(self.db_path, 'tournaments', tournaments_columns)
-        tournament_id = insert_rows(self.db_path, 'tournaments', 'tournament_name, tournament_type, ended, last_update', ((tournament_name, tournament_type, False, datetime.datetime.now()),)) [0]
-        
-        # Insert the players to participants table
-        participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_code BLOB NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
-        create_table(self.db_path, 'participants', participants_columns)
-        players_tuple = tuple((player[1], player[0], tournament_id) for player in players_list)
-        players_ids = insert_rows(self.db_path, 'participants', 'name, player_code, tournament_id', players_tuple)       
-        
-        # Create the matches table
-        if tournament_type == 'Knockout':
-            matches_columns = [
-                'id INTEGER NOT NULL',
-                'tournament_id INTEGER NOT NULL',
-                'required TEXT NOT NULL',
-                'ended BOOLEAN NOT NULL',
-                'player1 INTEGER',
-                'player2 INTEGER',
-                'winner INTEGER',
-                'PRIMARY KEY (id, tournament_id)',
-                'FOREIGN KEY (tournament_id) REFERENCES tournaments (tournament_id)'
-            ]       
-            create_table(self.db_path, 'KnockoutMatches', matches_columns)  
-        elif tournament_type == 'FreeForAll':
-            matches_columns = [
-                'id INTEGER NOT NULL',
-                'tournament_id INTEGER NOT NULL',
-                'ended BOOLEAN NOT NULL',
-                'player1 INTEGER',
-                'player2 INTEGER',
-                'winner INTEGER',
-                'PRIMARY KEY (id, tournament_id)',
-                'FOREIGN KEY (tournament_id) REFERENCES tournaments (tournament_id)'
-            ]
-            create_table(self.db_path, 'FreeForAllMatches', matches_columns)   
-        else: raise Exception(f'Unknown tournament type {tournament_type}')
+
+        key_hash = getShaRepr(tournament_name)
+        print('=======================================',key_hash,'=============================================================')
+        node = self.finger.find_succ(key_hash)
+        print('=======================================LLEGO AQUI=================================================')
+        print(node.id)
+
+        if(node.id != self.id):
+            print('=======================================LLEGO AQUI 2.0=================================================')
+            data = node.insert_tournament(tournament_type, players_list, tournament_name)
+
+        else:
+            # Insert to tournaments table
+            tournaments_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'tournament_name TEXT NOT NULL', 'tournament_type TEXT NOT NULL', 'ended BOOLEAN NOT NULL', 'last_update DATETIME'] 
+            create_table(self.db_path, 'tournaments', tournaments_columns)
+            tournament_id = insert_rows(self.db_path, 'tournaments', 'tournament_name, tournament_type, ended, last_update', ((tournament_name, tournament_type, False, datetime.datetime.now()),)) [0]
+            
+            # Insert the players to participants table
+            participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_code BLOB NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
+            create_table(self.db_path, 'participants', participants_columns)
+            players_tuple = tuple((player[1], player[0], tournament_id) for player in players_list)
+            players_ids = insert_rows(self.db_path, 'participants', 'name, player_code, tournament_id', players_tuple)       
+            
+            # Create the matches table
+            if tournament_type == 'Knockout':
+                matches_columns = [
+                    'id INTEGER NOT NULL',
+                    'tournament_id INTEGER NOT NULL',
+                    'required TEXT NOT NULL',
+                    'ended BOOLEAN NOT NULL',
+                    'player1 INTEGER',
+                    'player2 INTEGER',
+                    'winner INTEGER',
+                    'PRIMARY KEY (id, tournament_id)',
+                    'FOREIGN KEY (tournament_id) REFERENCES tournaments (tournament_id)'
+                ]       
+                create_table(self.db_path, 'KnockoutMatches', matches_columns)  
+            elif tournament_type == 'FreeForAll':
+                matches_columns = [
+                    'id INTEGER NOT NULL',
+                    'tournament_id INTEGER NOT NULL',
+                    'ended BOOLEAN NOT NULL',
+                    'player1 INTEGER',
+                    'player2 INTEGER',
+                    'winner INTEGER',
+                    'PRIMARY KEY (id, tournament_id)',
+                    'FOREIGN KEY (tournament_id) REFERENCES tournaments (tournament_id)'
+                ]
+                create_table(self.db_path, 'FreeForAllMatches', matches_columns)   
+            else: raise Exception(f'Unknown tournament type {tournament_type}')
         
         answer = pickle.dumps(['created_tournament', (tournament_id, players_ids), self.address])
         all_good = send_to(answer, connection)
