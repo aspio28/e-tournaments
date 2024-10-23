@@ -28,17 +28,33 @@ class FingerTable:
 
     # Method to find the predecessor of a given id
     def find_pred(self, id: int) -> 'ChordNodeReference':
-        node = self.node.ref
+        node = self.node
+        first_time = True
         while not in_between(id, node.id, node.succ.id):
-            node = node.closest_preceding_finger(id)
+            if first_time:
+                first_time = False
+                node = self.closest_preceding_finger(id)
+            else:
+                node = node.closest_preceding_finger(id)
         return node
 
     # Method to find the closest preceding finger of a given id
-    def closest_preceding_finger(self, id: int) -> 'ChordNodeReference':
+    def closest_preceding_finger(self, id: int, connection=None, address=None) -> 'ChordNodeReference':
+        id = int(id)
         for i in range(self.m - 1, -1, -1):
             if self.finger[i] and in_between(self.finger[i].id, self.node.id, id):
-                return self.finger[i]
-        return self.node.ref
+                if connection:
+                    answer = pickle.dumps(['closest_preceding', (self.finger[i],)])
+                    all_good = send_to(answer, connection)
+                    return all_good
+                else:
+                    return self.finger[i]
+        if connection:
+            answer = pickle.dumps(['closest_preceding', (self.node.ref,)])
+            all_good = send_to(answer, connection)
+            return all_good
+        else:
+            return self.node.ref
     
     def fix_fingers(self):
         while True:

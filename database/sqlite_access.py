@@ -109,7 +109,7 @@ def insert_rows(data_base_file_path:str, table_name:str, columns_names:str, row_
         for row in row_tuples_tuple:
             insert = sqlite_query + value
             cursor.execute(insert, row)
-            ids.append(cursor.lastrowid)
+            ids.append(row[0])
             # print(f"Last inserted ID: {ids[-1]}")
 
         connection.commit()

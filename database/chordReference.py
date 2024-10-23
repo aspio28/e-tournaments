@@ -59,13 +59,19 @@ class ChordNodeReference:
         request = pickle.dumps(['closest_preceding_finger', (str(id))])
         data = self._send_data(request)
         response = pickle.loads(data)[1]
-        return ChordNodeReference(response[1], self.port)
+        return response[0]
     
     def insert_tournament(self, tournament_type, players_list, tournament_name):
         request = pickle.dumps(['insert_tournament', (tournament_type, players_list, tournament_name)])
         data = self._send_data(request)
-        print('chord reference data==========================', data)
-        return data
+        response = pickle.loads(data)[1]
+        return response
+    
+    def save_match(self, match_type, match_id, args):
+        request = pickle.dumps(['save_match', (match_type, match_id, args)])
+        data = self._send_data(request)
+        response = pickle.loads(data)[1]
+        return response
 
     def ping(self):
         request = pickle.dumps(['ping', (None,)])
