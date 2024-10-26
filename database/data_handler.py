@@ -193,7 +193,7 @@ class DataBaseNode:
                 if match_type == 'KnockoutMatches':
                     matches_columns = [
                         'id INTEGER NOT NULL',
-                        'tournament_id INTEGER NOT NULL',
+                        'tournament_id TEXT NOT NULL',
                         'required TEXT NOT NULL',
                         'ended BOOLEAN NOT NULL',
                         'player1 INTEGER',
@@ -208,7 +208,7 @@ class DataBaseNode:
                 elif match_type == 'FreeForAllMatches':
                     matches_columns = [
                         'id INTEGER NOT NULL',
-                        'tournament_id INTEGER NOT NULL',
+                        'tournament_id TEXT NOT NULL',
                         'ended BOOLEAN NOT NULL',
                         'player1 INTEGER',
                         'player2 INTEGER',
@@ -221,6 +221,7 @@ class DataBaseNode:
                 
                 else: raise Exception(f'Unknown match type {match_type}')
             else:
+                print(args)
                 if match_type == 'KnockoutMatches':
                     insert_rows(self.db_path, match_type, 'id, tournament_id, required, ended, player1, player2, winner', ((match_id, *args),)) [0]
                 elif match_type == 'FreeForAllMatches':
@@ -228,33 +229,41 @@ class DataBaseNode:
                 else: raise Exception(f'Unknown match type {match_type}')
             
             # Update last_update in tournaments table directly
-            query = f'''SELECT tournament_type, ended
+            query = f'''SELECT tournament_name, tournament_type, ended
             FROM tournaments
-            WHERE id = {tournament_id}'''
+            WHERE id = '{tournament_id}' '''
             record = read_data(self.db_path, query) [0] 
-            tournament_type, ended = record
-            insert_rows(self.db_path, 'tournaments', 'id, tournament_type, ended, last_update', 
-            ((tournament_id, tournament_type, ended, datetime.datetime.now()),))
+            tournament_name, tournament_type, ended = record
+            insert_rows(self.db_path, 'tournaments', 'id, tournament_name, tournament_type, ended, last_update', 
+            ((tournament_id, tournament_name, tournament_type, ended, datetime.datetime.now()),))
             
         answer = pickle.dumps(['saved_match', match_id, self.address])
         all_good = send_to(answer, connection)
         return all_good
     
     def get_match(self, arguments: tuple, connection, address):
-        match_type, tournament_id, match_id = arguments  
-                
-        if match_type == 'KnockoutMatches':
-            query = f'''SELECT id, tournament_id, required, ended, player1, player2, winner
-            FROM KnockoutMatches
-            WHERE tournament_id = {tournament_id} AND id = {match_id}'''
-        elif match_type == 'FreeForAllMatches':
-            query = f'''SELECT id, tournament_id, ended, player1, player2, winner
-            FROM FreeForAllMatches
-            WHERE tournament_id = {tournament_id} AND id = {match_id}'''
-        else: raise Exception(f'Unknown match type {match_type}')
-        
-        record = read_data(self.db_path, query) [0]
+        match_type, tournament_id, match_id = arguments
+
+        tournament_hash = int(tournament_id) 
+        node = self.finger.find_succ(tournament_hash)
+
+        if(node.id != self.id):
+            record = node.get_match(match_type, match_type, tournament_id, match_id)
+
+        else:       
+            if match_type == 'KnockoutMatches':
+                query = f'''SELECT id, tournament_id, required, ended, player1, player2, winner
+                FROM KnockoutMatches
+                WHERE tournament_id = '{tournament_id}' AND id = {match_id}'''
+            elif match_type == 'FreeForAllMatches':
+                query = f'''SELECT id, tournament_id, ended, player1, player2, winner
+                FROM FreeForAllMatches
+                WHERE tournament_id = '{tournament_id}' AND id = {match_id}'''
+            else: raise Exception(f'Unknown match type {match_type}')
+            
+            record = read_data(self.db_path, query) [0]
         # time.sleep(8)
+        print(record)
         answer = pickle.dumps(['sending_match', record, self.address])
         all_good = send_to(answer, connection)
         return all_good
@@ -272,15 +281,25 @@ class DataBaseNode:
         return all_good
     
     def get_player(self, arguments: tuple, connection, address):
-        player_ids = arguments[0]
-        records = []
-        for id in player_ids:
-            query = f'''SELECT id, name, player_code
-            FROM participants
-            WHERE id = {id}'''
-            record = read_data(self.db_path, query) [0] 
-            records.append(record)
-            
+        player_ids, tournament_id = arguments
+
+        print('======================================================',player_ids, tournament_id,'================================================')
+        tournament_hash = int(tournament_id) 
+        node = self.finger.find_succ(tournament_hash)
+
+        if(node.id != self.id):
+            records = node.get_player(player_ids, tournament_id)
+
+        else:
+            records = []
+            for id in player_ids:
+                query = f'''SELECT id, name, player_code
+                FROM participants
+                WHERE id = {id}'''
+                record = read_data(self.db_path, query) [0] 
+                records.append(record)
+        
+        print(1)
         answer = pickle.dumps(['sending_player', records, self.address])
         all_good = send_to(answer, connection)
         return all_good
@@ -341,24 +360,33 @@ class DataBaseNode:
         return all_good
     
     def get_tournament(self, arguments: tuple, connection, address):
+        print(arguments)
         tournament_id_req, tournament_type_req = arguments
         
-        # Load from tournaments table
-        query = f'''SELECT id, tournament_type, ended
-        FROM tournaments
-        WHERE id = {tournament_id_req}'''
-        record = read_data(self.db_path, query) [0] 
-        tournament_id, tournament_type, ended = record
-        if tournament_type != tournament_type_req:
-            raise Exception(f"Cannot load a {tournament_type} tournament when requesting a {tournament_type_req}.")
-        ended = bool(ended)
-        
-        # Load players from the participants table
-        query = f'''SELECT id, tournament_id
-        FROM participants
-        WHERE tournament_id = {tournament_id_req}'''
-        players = read_data(self.db_path, query)
-        players_ids = [t[0] for t in players]
+        tournament_hash = int(tournament_id_req) 
+        node = self.finger.find_succ(tournament_hash)
+
+        if(node.id != self.id):
+            tournament_id, ended, players_ids = node.get_tournament(tournament_id_req, tournament_type_req)
+
+        else:
+            # Load from tournaments table
+            query = f'''SELECT id, tournament_type, ended
+            FROM tournaments
+            WHERE id = '{tournament_id_req}' '''
+
+            record = read_data(self.db_path, query) [0] 
+            tournament_id, tournament_type, ended = record
+            if tournament_type != tournament_type_req:
+                raise Exception(f"Cannot load a {tournament_type} tournament when requesting a {tournament_type_req}.")
+            ended = bool(ended)
+            
+            # Load players from the participants table
+            query = f'''SELECT id, tournament_id
+            FROM participants
+            WHERE tournament_id = '{tournament_id_req}' '''
+            players = read_data(self.db_path, query)
+            players_ids = [t[0] for t in players]
         
         answer = pickle.dumps(['loading_tournament', (tournament_id, ended, players_ids), self.address])
         all_good = send_to(answer, connection)
@@ -366,24 +394,41 @@ class DataBaseNode:
     
     def save_tournament(self, arguments: tuple, connection, address):
         tournament_id, tournament_type, ended = arguments
-        insert_rows(self.db_path, 'tournaments', 'id, tournament_type, ended, last_update', ((tournament_id, tournament_type, ended, datetime.datetime.now()),)) [0]
+
+        tournament_hash = int(tournament_id) 
+        node = self.finger.find_succ(tournament_hash)
+
+        if(node.id != self.id):
+            tournament_id = node.save_tournament(tournament_id, tournament_type, ended)
+
+        else:
+            insert_rows(self.db_path, 'tournaments', 'id, tournament_type, ended, last_update', ((tournament_id, tournament_type, ended, datetime.datetime.now()),)) [0]
+        
         answer = pickle.dumps(['saved_tournament', tournament_id, self.address])
         all_good = send_to(answer, connection)
         return all_good
         
     def get_tournament_matches(self, arguments: tuple, connection, address):
         tournament_id, tournament_type  = arguments
-        if tournament_type == 'Knockout':
-            query = f'''SELECT id, tournament_id, required, ended, player1, player2, winner
-            FROM KnockoutMatches
-            WHERE tournament_id = {tournament_id}'''      
-            all_matches = read_data(self.db_path, query)
-        elif tournament_type == 'FreeForAll':
-            query = f'''SELECT id, tournament_id, ended, player1, player2, winner
-            FROM FreeForAllMatches
-            WHERE tournament_id = {tournament_id}''' 
-            all_matches = read_data(self.db_path, query)
-        else: raise Exception(f'Unknown tournament type {tournament_type}')
+
+        tournament_hash = int(tournament_id) 
+        node = self.finger.find_succ(tournament_hash)
+
+        if(node.id != self.id):
+            tournament_id, all_matches = node.get_tournament_matches(tournament_id, tournament_type)
+        
+        else:
+            if tournament_type == 'Knockout':
+                query = f'''SELECT id, tournament_id, required, ended, player1, player2, winner
+                FROM KnockoutMatches
+                WHERE tournament_id = '{tournament_id}' '''      
+                all_matches = read_data(self.db_path, query)
+            elif tournament_type == 'FreeForAll':
+                query = f'''SELECT id, tournament_id, ended, player1, player2, winner
+                FROM FreeForAllMatches
+                WHERE tournament_id = '{tournament_id}' ''' 
+                all_matches = read_data(self.db_path, query)
+            else: raise Exception(f'Unknown tournament type {tournament_type}')
         
         answer = pickle.dumps(['sending_tournament_matches', (tournament_id, all_matches), self.address])
         all_good = send_to(answer, connection)
@@ -391,30 +436,38 @@ class DataBaseNode:
     
     def get_tournament_status(self, arguments: tuple, connection, address):
         tournament_id = arguments[0]
-        # Load from tournaments table
-        query = f'''SELECT id, tournament_type, ended
-        FROM tournaments
-        WHERE id = {tournament_id}'''
-        record = read_data(self.db_path, query) [0] 
-        id, tournament_type, ended = record
-        ended = bool(ended)
 
-        if tournament_type == 'Knockout':
-            query = f'''SELECT id, tournament_id, required, ended, player1, player2, winner
-            FROM KnockoutMatches
-            WHERE tournament_id = {tournament_id}'''      
-            all_matches = read_data(self.db_path, query)
-        elif tournament_type == 'FreeForAll':
-            query = f'''SELECT id, tournament_id, ended, player1, player2, winner
-            FROM FreeForAllMatches
-            WHERE tournament_id = {tournament_id}''' 
-            all_matches = read_data(self.db_path, query)
-        else: raise Exception(f'Unknown tournament type {tournament_type}')
-        
-        query = f'''SELECT id, name, tournament_id
-            FROM participants
-            WHERE tournament_id = {tournament_id}'''
-        all_players = read_data(self.db_path, query)
+        tournament_hash = int(tournament_id) 
+        node = self.finger.find_succ(tournament_hash)
+
+        if(node.id != self.id):
+            tournament_id, tournament_type, ended, all_matches, all_players = node.get_tournament_status(tournament_id)
+
+        else:
+            # Load from tournaments table
+            query = f'''SELECT id, tournament_type, ended
+            FROM tournaments
+            WHERE id = '{tournament_id}' '''
+            record = read_data(self.db_path, query) [0] 
+            id, tournament_type, ended = record
+            ended = bool(ended)
+
+            if tournament_type == 'Knockout':
+                query = f'''SELECT id, tournament_id, required, ended, player1, player2, winner
+                FROM KnockoutMatches
+                WHERE tournament_id = '{tournament_id}' '''      
+                all_matches = read_data(self.db_path, query)
+            elif tournament_type == 'FreeForAll':
+                query = f'''SELECT id, tournament_id, ended, player1, player2, winner
+                FROM FreeForAllMatches
+                WHERE tournament_id = '{tournament_id}' ''' 
+                all_matches = read_data(self.db_path, query)
+            else: raise Exception(f'Unknown tournament type {tournament_type}')
+            
+            query = f'''SELECT id, name, tournament_id
+                FROM participants
+                WHERE tournament_id = '{tournament_id}' '''
+            all_players = read_data(self.db_path, query)
 
         answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended, all_matches, all_players), self.address])
         all_good = send_to(answer, connection)

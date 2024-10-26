@@ -130,7 +130,7 @@ class ServerNode:
                 break
                             
             minion_addr = self._get_minion_node_addr()
-            request = pickle.dumps(['execute_match', (match.player1, match.player2), self.address])
+            request = pickle.dumps(['execute_match', (match.player1, match.player2, tournament.id), self.address])
             
             send_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             send_sock.settimeout(4)
@@ -147,6 +147,7 @@ class ServerNode:
                         raise ConnectionError("I'm falling down")
 
             match_winner_id = pickle.loads(data) [1]
+            print('===========================================',match_winner_id,'==========================================')
             match.ended = True # The database could be optimized removing ended and using the winner as a ended (if winner not None => ended is True)
             match.winner = match_winner_id
             match.save_to_db(self._get_data_node_addr()) 

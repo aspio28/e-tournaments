@@ -6,11 +6,11 @@ import os
 from TicTacToe import *
 from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
            
-def get_players_instances(player_ids, address):
+def get_players_instances(player_ids, tournament_id, address):
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
     sock.settimeout(4)
     sock.connect(address) 
-    request = pickle.dumps(['get_player', (player_ids,)])
+    request = pickle.dumps(['get_player', (player_ids, tournament_id)])
     print(f"Requesting the players id to the database node in {address}")################
     all_good, data = send_and_wait_for_answer(request, sock, 4)
     sock.close()
@@ -115,8 +115,8 @@ class MinionNode:
             self.data_nodes = get_from_dns('DataBase')
         return random.choice(self.data_nodes)
     
-    def _do_a_match(self, p1_id, p2_id):
-        players = get_players_instances([p1_id, p2_id], self._get_data_node_addr())
+    def _do_a_match(self, p1_id, p2_id, tournament_id):
+        players = get_players_instances([p1_id, p2_id], tournament_id, self._get_data_node_addr())
         name, fun = players[0]
         player1 = Player(name, fun)
         name, fun = players[1]
@@ -132,8 +132,8 @@ class MinionNode:
         return match_winner_id
 
     def execute_match(self, arguments: tuple, connection, address):
-        p1_id, p2_id = arguments
-        match_winner = self._do_a_match(p1_id, p2_id)
+        p1_id, p2_id, tournament_id = arguments
+        match_winner = self._do_a_match(p1_id, p2_id, tournament_id)
         request = pickle.dumps(['match_result', match_winner])
         all_good = send_to(request, connection)
         return all_good

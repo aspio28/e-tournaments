@@ -96,6 +96,8 @@ def insert_rows(data_base_file_path:str, table_name:str, columns_names:str, row_
         return False
 
     try:
+        print(row_tuples_tuple)
+        print(columns_names)
         connection = sqlite3.connect(data_base_file_path)
         cursor = connection.cursor()
         # print("Connected to SQLite")
@@ -144,10 +146,10 @@ def read_data(data_base_file_path:str, query:str="SELECT * from songs"):
         connection = sqlite3.connect(data_base_file_path)
         cursor = connection.cursor()
         # print("Connected to SQLite")
-
         cursor.execute(query)
         record = cursor.fetchall()
         cursor.close()
+        print(record)
  
     except sqlite3.Error as error:
         print("Failed to read data from sqlite table:", error)

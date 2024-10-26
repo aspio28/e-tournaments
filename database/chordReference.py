@@ -72,6 +72,42 @@ class ChordNodeReference:
         data = self._send_data(request)
         response = pickle.loads(data)[1]
         return response
+    
+    def get_match(self, match_type, tournament_id, match_id):
+        request = pickle.dumps(['get_match', (match_type, tournament_id, match_id)])
+        data = self._send_data(request)
+        response = pickle.loads(data)[1]
+        return response
+    
+    def get_player(self, player_ids, tournament_id):
+        request = pickle.dumps(['get_player', (player_ids, tournament_id)])
+        data = self._send_data(request)
+        response = pickle.loads(data)[1]
+        return response
+    
+    def get_tournament(self, tournament_id_req, tournament_type_req):
+        request = pickle.dumps(['get_tournament', (tournament_id_req, tournament_type_req)])
+        data = self._send_data(request)
+        response = pickle.loads(data)[1]
+        return response
+
+    def save_tournament(self, tournament_id, tournament_type, ended):
+        request = pickle.dumps(['save_tournament', (tournament_id, tournament_type, ended)])
+        data = self._send_data(request)
+        response = pickle.loads(data)[1]
+        return response
+
+    def get_tournament_matches(self, tournament_id, tournament_type):
+        request = pickle.dumps(['get_tournament_matches', (tournament_id, tournament_type)])
+        data = self._send_data(request)
+        response = pickle.loads(data)[1]
+        return response
+
+    def get_tournament_status(self, tournament_id):
+        request = pickle.dumps(['get_tournament_status', (tournament_id, )])
+        data = self._send_data(request)
+        response = pickle.loads(data)[1]
+        return response
 
     def ping(self):
         request = pickle.dumps(['ping', (None,)])
