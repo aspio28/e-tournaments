@@ -3,7 +3,7 @@ import socket
 import time
 import random
 import string
-from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
+from utils import send_to, receive_from, send_and_wait_for_answer, get_dns_address, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
 
 def random_player_move(board, move):
     import random

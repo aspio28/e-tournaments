@@ -3,7 +3,7 @@ import socket
 import time
 import multiprocessing
 from TournamentsLogic import *
-from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
+from utils import send_to, receive_from, send_and_wait_for_answer, get_dns_address, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
 import os
 
 tournaments_type = {'Knockout': KnockoutTournament,
@@ -64,13 +64,17 @@ class ServerNode:
         received = receive_from(connection, 3)
         if len(received) == 0:
             print("Failed request, data not received") 
-            im_conn = send_ping_to(DNS_ADDRESS)
+            dns_address = get_dns_address()
+            im_conn = send_ping_to(dns_address) 
             if not im_conn:
                 connection.close()
                 raise ConnectionError("I'm falling down")
             
         try:
             decoded = pickle.loads(received)
+            if decoded[0] == "DNS":
+                connection.close()
+                return status
             if self.requests.get(decoded[0]):
                 function_to_answer = self.requests.get(decoded[0])
                 status = function_to_answer(decoded[1], connection, address)
@@ -142,12 +146,12 @@ class ServerNode:
                 minion_nodes = get_from_dns('Minion')
                 all_good, data = self.retry_after_timeout(request, minion_nodes)
                 if not all_good:
-                    im_conn = send_ping_to(DNS_ADDRESS)
+                    dns_address = get_dns_address()
+                    im_conn = send_ping_to(dns_address) 
                     if not im_conn:
                         raise ConnectionError("I'm falling down")
 
             match_winner_id = pickle.loads(data) [1]
-            print('===========================================',match_winner_id,'==========================================')
             match.ended = True # The database could be optimized removing ended and using the winner as a ended (if winner not None => ended is True)
             match.winner = match_winner_id
             match.save_to_db(self._get_data_node_addr()) 
@@ -158,15 +162,16 @@ class ServerNode:
         sock.settimeout(4)
         sock.connect(self._get_data_node_addr())
 
-        request = pickle.dumps(['save_tournament', (tournament.id, tournament.tournament_type(), tournament.ended)])
-        print("saving tournament", ['save_tournament', (tournament.id, tournament.tournament_type(), tournament.ended)])
+        request = pickle.dumps(['save_tournament', (tournament.id, tournament.tournament_name, tournament.tournament_type(), tournament.ended)])
+        print("saving tournament", ['save_tournament', (tournament.id, tournament.tournament_name, tournament.tournament_type(), tournament.ended)])
         all_good, data = send_and_wait_for_answer(request, sock, 5)
         sock.close()
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = self.retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
 
@@ -184,17 +189,18 @@ class ServerNode:
         all_good = send_to(request, connection)
         
         if not all_good:
-            im_conn = send_ping_to(DNS_ADDRESS)
+            dns_address = get_dns_address()
+            im_conn = send_ping_to(dns_address) 
             if not im_conn:
                 raise ConnectionError("I'm falling down")
         
         return self._execute_tournament(tournament_instance)
 
     def continue_tournament(self, arguments: tuple, connection, address):
-        tournament_type, tournament_id = arguments 
+        tournament_type, tournament_id, tournament_name = arguments 
         print("arguments",arguments)
-        tournament_instance = tournaments_type[tournament_type] (start=False, id=tournament_id, players=None)
-        print(f"tournament instance start={False}, id={tournament_id}, players={None}",)
+        tournament_instance = tournaments_type[tournament_type] (start=False, id=tournament_id, players=None, tournament_name=tournament_name)
+        print(f"tournament instance start={False}, id={tournament_id}, players={None}, name={tournament_name}",)
         request = pickle.dumps(['running_tournament', (tournament_instance.id,)])
         all_good = send_to(request, connection)
         
@@ -212,9 +218,11 @@ class ServerNode:
             data_nodes = get_from_dns('DataBase')
             all_good, data = self.retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
+        print(pickle.loads(data)[1])
         tournament_id, tournament_type, ended, all_matches, all_players = pickle.loads(data)[1]
         answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended, all_matches, all_players), self.address])
         all_good = send_to(answer, connection)

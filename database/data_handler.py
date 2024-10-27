@@ -7,7 +7,7 @@ import datetime
 import multiprocessing
 
 from sqlite_access import *
-from utils import DNS_ADDRESS, getShaRepr, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay, in_between
+from utils import DNS_ADDRESS, getShaRepr, send_to, receive_from, send_and_wait_for_answer, get_dns_address, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay, in_between
 from chordReference import ChordNodeReference
 from fingerTable import FingerTable
 from succ_list import SuccList
@@ -29,8 +29,11 @@ class DataBaseNode:
         self.finger = FingerTable(self)
         self.successors = SuccList(3, self)
 
-        if not os.path.exists(self.db_path):
-            create_db(self.db_path)
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
+
+        create_db(self.db_path)
+
         self.requests = {'ping': send_echo_replay,
                         'Failed': None,
                         'save_match': self.save_match, 
@@ -49,7 +52,7 @@ class DataBaseNode:
                         'closest_preceding_finger': self.finger.closest_preceding_finger,
                         'check_predecessor': self.check_predecessor,
                         'notify': self.notify,
-                        'ping': self.ping
+                        'ping_ring': self.ping
                         }
         
         self.address = (self.ip, self.port)
@@ -100,18 +103,23 @@ class DataBaseNode:
         received = receive_from(connection, 3)
         if len(received) == 0:
             print("Failed request, data not received") 
-            im_conn = send_ping_to(DNS_ADDRESS)
+            dns_address = get_dns_address()
+            im_conn = send_ping_to(dns_address) 
             if not im_conn:
                 connection.close()
                 raise ConnectionError("I'm falling down")
         try:
             decoded = pickle.loads(received)
-
+            if decoded[0] == "DNS":
+                connection.close()
+                return status
+                
             if self.requests.get(decoded[0]):
                 function_to_answer = self.requests.get(decoded[0])
                 status = function_to_answer(decoded[1], connection, address)
                 if not status:
-                    im_conn = send_ping_to(DNS_ADDRESS)
+                    dns_address = get_dns_address()
+                    im_conn = send_ping_to(dns_address) 
                     if not im_conn:
                         raise ConnectionError("I'm falling down")
 
@@ -131,23 +139,23 @@ class DataBaseNode:
         while True:
             try:
                 # Load from tournaments table the not ended tournaments
-                query = f'''SELECT id, tournament_type, last_update
+                query = f'''SELECT id, tournament_name, tournament_type, last_update
                 FROM tournaments
                 WHERE ended = 0'''
                 records = read_data(self.db_path, query) 
                 
                 inactive_tournaments = []
-                for tournament_id, tournament_type, last_update_time in records:
+                for tournament_id, tournament_name, tournament_type, last_update_time in records:
                     last_update = datetime.datetime.strptime(last_update_time, '%Y-%m-%d %H:%M:%S.%f')
                     time_elapsed = datetime.datetime.now() - last_update
                     if time_elapsed.total_seconds() >= 15: # Check if 15 seconds have passed
-                        inactive_tournaments.append((tournament_type, tournament_id))
+                        inactive_tournaments.append((tournament_type, tournament_id, tournament_name))
                 
-                for t_type, t_id in inactive_tournaments:
+                for t_type, t_id, t_name in inactive_tournaments:
                     servers = get_from_dns('Server')
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.settimeout(4)
-                    request = pickle.dumps(['continue_tournament', (t_type, t_id), self.address])
+                    request = pickle.dumps(['continue_tournament', (t_type, t_id, t_name), self.address])
                     all_good, data = self.retry_after_timeout(request, servers)
                     
             except Exception as e:
@@ -203,7 +211,7 @@ class DataBaseNode:
                         'FOREIGN KEY (tournament_id) REFERENCES tournaments (tournament_id)'
                     ] 
                     create_table(self.db_path, match_type, matches_columns)   
-                    match_id = insert_rows(self.db_path, match_type, 'tournament_id, required, ended, player1, player2, winner', (args,)) [0]
+                    match_id = insert_rows(self.db_path, match_type, 'tournament_id, required, ended, player1, player2, winner', (args,), with_autoincrement=True) [0]
                 
                 elif match_type == 'FreeForAllMatches':
                     matches_columns = [
@@ -221,7 +229,6 @@ class DataBaseNode:
                 
                 else: raise Exception(f'Unknown match type {match_type}')
             else:
-                print(args)
                 if match_type == 'KnockoutMatches':
                     insert_rows(self.db_path, match_type, 'id, tournament_id, required, ended, player1, player2, winner', ((match_id, *args),)) [0]
                 elif match_type == 'FreeForAllMatches':
@@ -248,7 +255,7 @@ class DataBaseNode:
         node = self.finger.find_succ(tournament_hash)
 
         if(node.id != self.id):
-            record = node.get_match(match_type, match_type, tournament_id, match_id)
+            record = node.get_match(match_type, tournament_id, match_id)
 
         else:       
             if match_type == 'KnockoutMatches':
@@ -263,7 +270,7 @@ class DataBaseNode:
             
             record = read_data(self.db_path, query) [0]
         # time.sleep(8)
-        print(record)
+
         answer = pickle.dumps(['sending_match', record, self.address])
         all_good = send_to(answer, connection)
         return all_good
@@ -274,7 +281,7 @@ class DataBaseNode:
         participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_code TEXT NOT NULL', 'tournament_id INTEGER', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
         create_table(self.db_path, 'participants', participants_columns)
         players_tuple = tuple((player[1], player[0], tournament_id) for player in players_list)
-        players_ids = insert_rows(self.db_path, 'participants', 'name, player_code, tournament_id', players_tuple)       
+        players_ids = insert_rows(self.db_path, 'participants', 'name, player_code, tournament_id', players_tuple, with_autoincrement=True)       
         
         answer = pickle.dumps(['added_players', players_ids, self.address])
         all_good = send_to(answer, connection)
@@ -283,7 +290,6 @@ class DataBaseNode:
     def get_player(self, arguments: tuple, connection, address):
         player_ids, tournament_id = arguments
 
-        print('======================================================',player_ids, tournament_id,'================================================')
         tournament_hash = int(tournament_id) 
         node = self.finger.find_succ(tournament_hash)
 
@@ -299,7 +305,6 @@ class DataBaseNode:
                 record = read_data(self.db_path, query) [0] 
                 records.append(record)
         
-        print(1)
         answer = pickle.dumps(['sending_player', records, self.address])
         all_good = send_to(answer, connection)
         return all_good
@@ -325,7 +330,7 @@ class DataBaseNode:
             participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_code BLOB NOT NULL', 'tournament_id TEXT', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
             create_table(self.db_path, 'participants', participants_columns)
             players_tuple = tuple((player[1], player[0], tournament_id) for player in players_list)
-            players_ids = insert_rows(self.db_path, 'participants', 'name, player_code, tournament_id', players_tuple)       
+            players_ids = insert_rows(self.db_path, 'participants', 'name, player_code, tournament_id', players_tuple, with_autoincrement=True) 
             
             # Create the matches table
             if tournament_type == 'Knockout':
@@ -360,7 +365,7 @@ class DataBaseNode:
         return all_good
     
     def get_tournament(self, arguments: tuple, connection, address):
-        print(arguments)
+        
         tournament_id_req, tournament_type_req = arguments
         
         tournament_hash = int(tournament_id_req) 
@@ -393,16 +398,16 @@ class DataBaseNode:
         return all_good
     
     def save_tournament(self, arguments: tuple, connection, address):
-        tournament_id, tournament_type, ended = arguments
+        tournament_id, tournament_name, tournament_type, ended = arguments
 
         tournament_hash = int(tournament_id) 
         node = self.finger.find_succ(tournament_hash)
 
         if(node.id != self.id):
-            tournament_id = node.save_tournament(tournament_id, tournament_type, ended)
+            tournament_id = node.save_tournament(tournament_id, tournament_name, tournament_type, ended)
 
         else:
-            insert_rows(self.db_path, 'tournaments', 'id, tournament_type, ended, last_update', ((tournament_id, tournament_type, ended, datetime.datetime.now()),)) [0]
+            insert_rows(self.db_path, 'tournaments', 'id, tournament_name, tournament_type, ended, last_update', ((tournament_id, tournament_name, tournament_type, ended, datetime.datetime.now()),)) [0]
         
         answer = pickle.dumps(['saved_tournament', tournament_id, self.address])
         all_good = send_to(answer, connection)
@@ -470,6 +475,7 @@ class DataBaseNode:
             all_players = read_data(self.db_path, query)
 
         answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended, all_matches, all_players), self.address])
+        print((tournament_id, tournament_type, ended, all_matches, all_players))
         all_good = send_to(answer, connection)
         return all_good
 

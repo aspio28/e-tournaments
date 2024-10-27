@@ -4,7 +4,7 @@ import random, time
 import pickle
 import socket
 import copy
-from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
+from utils import send_to, receive_from, send_and_wait_for_answer, get_dns_address, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
 
 def retry_after_timeout(request, addresses):
     for addr in addresses:
@@ -65,7 +65,6 @@ class KnockoutMatch(Match):
     def match_from_db(t_id, m_id, address):
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         sock.connect(address) # TODO
-        
         request = pickle.dumps(['get_match', ('KnockoutMatches', t_id, m_id)])
         all_good, data = send_and_wait_for_answer(request, sock, 4) # [(7, 6, '', 0, 24, 21)]
         sock.close()
@@ -73,7 +72,8 @@ class KnockoutMatch(Match):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
         
@@ -96,7 +96,8 @@ class KnockoutMatch(Match):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -132,7 +133,8 @@ class FreeForAllMatch(Match):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -152,7 +154,8 @@ class FreeForAllMatch(Match):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -249,6 +252,7 @@ class KnockoutTournament(Tournament):
         else:
             if id == None:
                 raise Exception("A tournament that is not beginning now must recieve id")
+            self.tournament_name = tournament_name
             self.id = id
             self.load_tournament_from_id()
             self.players_list = copy.deepcopy(self.players_ids)
@@ -273,12 +277,12 @@ class KnockoutTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
         answer = pickle.loads(data) 
-        print(answer)
         self.id = answer[1][0]
         self.players_ids = answer[1][1]
         return all_good
@@ -329,7 +333,8 @@ class KnockoutTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -350,7 +355,8 @@ class KnockoutTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -383,10 +389,8 @@ class KnockoutTournament(Tournament):
         return self._find_not_ended(self.last_match)
     
     def _find_not_ended(self, root:KnockoutMatch):
-            
         queue = deque([(root, 0)])  # Queue for BFS, storing (match, level)
         levels = {}  # To track matches at each level
-
         while queue:
             current_match, level = queue.popleft()
 
@@ -394,12 +398,12 @@ class KnockoutTournament(Tournament):
             if level not in levels:
                 levels[level] = []
             levels[level].append(current_match)
-
+            
             # Add child matches to the queue if they exist
             if len(current_match.required) == 2:
                 queue.append((KnockoutMatch.match_from_db(self.id, current_match.required[0], self.get_data_node_addr()), level + 1))
                 queue.append((KnockoutMatch.match_from_db(self.id, current_match.required[1], self.get_data_node_addr()), level + 1))
-
+         
         # Now check each level from the highest to the lowest
         last_level = []
         sorted_levels = sorted(levels.keys(), reverse=False) # [0, 1, 2, ...]
@@ -422,7 +426,6 @@ class KnockoutTournament(Tournament):
                 
             if ended_matches and non_ended_matches:
                 return non_ended_matches[0]
-
         return None
     
     def next_match(self):
@@ -449,16 +452,16 @@ class KnockoutTournament(Tournament):
         self.ended = self.last_match.ended
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         sock.connect(self.get_data_node_addr())
-    
         if self.ended:
-            request = pickle.dumps(['save_tournament', (self.id, self.tournament_type(), self.ended)])
+            request = pickle.dumps(['save_tournament', (self.id, self.tournament_name, self.tournament_type(), self.ended)])
             all_good, data = send_and_wait_for_answer(request, sock, 4)
             sock.close()
             if len(data) == 0:              
                 data_nodes = get_from_dns('DataBase')
                 all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
                 
@@ -483,6 +486,7 @@ class FreeForAllTournament(Tournament):
         else:
             if id == None:
                 raise Exception("A tournament that is not beginning now must recieve id")
+            self.tournament_name = tournament_name
             self.id = id
             self.load_tournament_from_id()
             self.players_list = copy.deepcopy(self.players_ids)
@@ -509,12 +513,12 @@ class FreeForAllTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
         answer = pickle.loads(data) 
-        print(answer)
         self.id = answer[1][0]
         self.players_ids = answer[1][1]
         return all_good
@@ -545,7 +549,8 @@ class FreeForAllTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -566,7 +571,8 @@ class FreeForAllTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -614,14 +620,15 @@ class FreeForAllTournament(Tournament):
         print("Ended tournament")
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         sock.connect(self.get_data_node_addr()) 
-        request = pickle.dumps(['save_tournament', (self.id, self.tournament_type(), self.ended)])
+        request = pickle.dumps(['save_tournament', (self.id, self.tournament_name, self.tournament_type(), self.ended)])
         all_good, data = send_and_wait_for_answer(request, sock, 4)
         sock.close()
         if len(data) == 0:              
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
