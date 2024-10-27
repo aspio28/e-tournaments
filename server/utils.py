@@ -98,9 +98,10 @@ def get_dns_address(wait_time=5):
         response, server_address = sock.recvfrom(1024)
         print(f"DNS server found at IP address: {server_address[0]}")
         result = pickle.loads(response)
+        print(f"DNS address received: {result}")
         sock.close()
         if result[0] == "DNS_ADDR":
-            return result            
+            return result[1]             
     except socket.timeout:
         print("No response received. DNS server not found.")
         sock.close()

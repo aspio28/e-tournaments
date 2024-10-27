@@ -100,7 +100,7 @@ def get_dns_address(wait_time=5):
         result = pickle.loads(response)
         sock.close()
         if result[0] == "DNS_ADDR":
-            return result            
+            return result[1]             
     except socket.timeout:
         print("No response received. DNS server not found.")
         sock.close()
