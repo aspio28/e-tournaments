@@ -147,7 +147,6 @@ class ServerNode:
                         raise ConnectionError("I'm falling down")
 
             match_winner_id = pickle.loads(data) [1]
-            print('===========================================',match_winner_id,'==========================================')
             match.ended = True # The database could be optimized removing ended and using the winner as a ended (if winner not None => ended is True)
             match.winner = match_winner_id
             match.save_to_db(self._get_data_node_addr()) 
@@ -158,8 +157,8 @@ class ServerNode:
         sock.settimeout(4)
         sock.connect(self._get_data_node_addr())
 
-        request = pickle.dumps(['save_tournament', (tournament.id, tournament.tournament_type(), tournament.ended)])
-        print("saving tournament", ['save_tournament', (tournament.id, tournament.tournament_type(), tournament.ended)])
+        request = pickle.dumps(['save_tournament', (tournament.id, tournament.tournament_name, tournament.tournament_type(), tournament.ended)])
+        print("saving tournament", ['save_tournament', (tournament.id, tournament.tournament_name, tournament.tournament_type(), tournament.ended)])
         all_good, data = send_and_wait_for_answer(request, sock, 5)
         sock.close()
         if len(data) == 0:              
@@ -191,10 +190,10 @@ class ServerNode:
         return self._execute_tournament(tournament_instance)
 
     def continue_tournament(self, arguments: tuple, connection, address):
-        tournament_type, tournament_id = arguments 
+        tournament_type, tournament_id, tournament_name = arguments 
         print("arguments",arguments)
-        tournament_instance = tournaments_type[tournament_type] (start=False, id=tournament_id, players=None)
-        print(f"tournament instance start={False}, id={tournament_id}, players={None}",)
+        tournament_instance = tournaments_type[tournament_type] (start=False, id=tournament_id, players=None, tournament_name=tournament_name)
+        print(f"tournament instance start={False}, id={tournament_id}, players={None}, name={tournament_name}",)
         request = pickle.dumps(['running_tournament', (tournament_instance.id,)])
         all_good = send_to(request, connection)
         
@@ -215,6 +214,7 @@ class ServerNode:
                 im_conn = send_ping_to(DNS_ADDRESS)
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
+        print(pickle.loads(data)[1])
         tournament_id, tournament_type, ended, all_matches, all_players = pickle.loads(data)[1]
         answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended, all_matches, all_players), self.address])
         all_good = send_to(answer, connection)

@@ -15,7 +15,7 @@ class ChordNodeReference:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect((self.ip, self.port))
                 s.sendall(data)
-                return s.recv(1024)
+                return s.recv(2*1024)
         except Exception as e:
             print(f"Error sending data: {e}")
             return b''
@@ -91,8 +91,8 @@ class ChordNodeReference:
         response = pickle.loads(data)[1]
         return response
 
-    def save_tournament(self, tournament_id, tournament_type, ended):
-        request = pickle.dumps(['save_tournament', (tournament_id, tournament_type, ended)])
+    def save_tournament(self, tournament_id, tournament_name, tournament_type, ended):
+        request = pickle.dumps(['save_tournament', (tournament_id, tournament_name, tournament_type, ended)])
         data = self._send_data(request)
         response = pickle.loads(data)[1]
         return response
@@ -107,10 +107,11 @@ class ChordNodeReference:
         request = pickle.dumps(['get_tournament_status', (tournament_id, )])
         data = self._send_data(request)
         response = pickle.loads(data)[1]
+        print(response)
         return response
 
     def ping(self):
-        request = pickle.dumps(['ping', (None,)])
+        request = pickle.dumps(['ping_ring', (None,)])
         data = self._send_data(request)
         response = pickle.loads(data)[1]
         return response[0]

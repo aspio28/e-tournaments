@@ -69,7 +69,7 @@ def create_table(data_base_file_path:str, table_name:str, columns_list:list):
             connection.close()
             # print("sqlite connection is closed")
 
-def insert_rows(data_base_file_path:str, table_name:str, columns_names:str, row_tuples_tuple:tuple):
+def insert_rows(data_base_file_path:str, table_name:str, columns_names:str, row_tuples_tuple:tuple, with_autoincrement:bool=False):
     """ Insert one or more rows in the specified table, of the specified database.
     'columns_names' is a string of the name of the columns in the table, comma separated.
     'row_tuples_tuple' is a tuple with one or more elements, where each element is a tuple 
@@ -96,8 +96,7 @@ def insert_rows(data_base_file_path:str, table_name:str, columns_names:str, row_
         return False
 
     try:
-        print(row_tuples_tuple)
-        print(columns_names)
+
         connection = sqlite3.connect(data_base_file_path)
         cursor = connection.cursor()
         # print("Connected to SQLite")
@@ -111,7 +110,10 @@ def insert_rows(data_base_file_path:str, table_name:str, columns_names:str, row_
         for row in row_tuples_tuple:
             insert = sqlite_query + value
             cursor.execute(insert, row)
-            ids.append(row[0])
+            if with_autoincrement:
+                ids.append(cursor.lastrowid)
+            else:
+                ids.append(row[0])
             # print(f"Last inserted ID: {ids[-1]}")
 
         connection.commit()
@@ -149,7 +151,6 @@ def read_data(data_base_file_path:str, query:str="SELECT * from songs"):
         cursor.execute(query)
         record = cursor.fetchall()
         cursor.close()
-        print(record)
  
     except sqlite3.Error as error:
         print("Failed to read data from sqlite table:", error)
