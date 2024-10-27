@@ -54,7 +54,7 @@ def greedy_player_move(board, move):
             if board[i][j] == -1:
                 return i, j, move
             
-    #check if the player can win
+    #check if the player can wintest
     winning_move = check_win(board, move)
     if winning_move:
         return *winning_move, move
