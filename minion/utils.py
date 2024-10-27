@@ -84,7 +84,7 @@ def send_and_wait_for_answer(payload: bytes, connection: socket.socket, wait_tim
         return all_sent, response
     return False, None
 
-def get_dns_address(wait_time):    
+def get_dns_address(wait_time=5):    
     broadcast_addrs = ('255.255.255.255', 6000)  # Broadcast address
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
