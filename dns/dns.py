@@ -3,10 +3,12 @@ import time
 import pickle
 import socket
 import multiprocessing
-from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
+from utils import send_to, receive_from, send_and_wait_for_answer, get_dns_address, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
 
 class DNSNode:
     str_rep = 'DNS'
+    port = 5353
+    ip = os.getenv('NODE_IP')
     def __init__(self):
         self.requests = {'ping': send_echo_replay,
                         'Failed': None,
@@ -20,7 +22,7 @@ class DNSNode:
         with open(self.address_log, 'wb') as f:
             pickle.dump(logs, f)
         
-        self.address = DNS_ADDRESS
+        self.address = (self.ip, self.port)
         self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.serverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.serverSocket.bind(self.address)
@@ -29,6 +31,9 @@ class DNSNode:
             
         self.ttl_checker = multiprocessing.Process(target=self.check_ttl)
         self.ttl_checker.start()
+        
+        self.broadcast_handler = multiprocessing.Process(target=self.receive_broadcast)
+        self.broadcast_handler.start()
         
         processes = []
         try:
@@ -55,6 +60,9 @@ class DNSNode:
             return status
         try:
             decoded = pickle.loads(received)
+            if decoded[0] == "DNS":
+                connection.close()
+                return status
             if self.requests.get(decoded[0]):
                 function_to_answer = self.requests.get(decoded[0])
                 status = function_to_answer(decoded[1], connection, address)
@@ -68,6 +76,29 @@ class DNSNode:
             connection.close()
         return status
     
+    def receive_broadcast(self):
+        while True:
+            try:
+                broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) 
+                broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                broadcast_sock.bind(('', 6000))
+                print("DNS server listening for broadcast messages...")
+                while True:
+                    data, client_address = broadcast_sock.recvfrom(1024)
+                    request = pickle.loads(data)
+                    if request[0] == "DNS":
+                        print(f"Received discovery message from {client_address[0]}")
+                        
+                        # Respond with this server's IP address
+                        response = b"DNS_SERVER_IP"
+                        response = pickle.dumps(["DNS_ADDR", self.address])
+                        broadcast_sock.sendto(response, client_address)
+            except Exception as e:
+                print(f"Error in Receive Broadcast: {e}")
+                broadcast_sock.close()
+
+            time.sleep(3)
+        
     def check_ttl(self):
         while True:
             try:

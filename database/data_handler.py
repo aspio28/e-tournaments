@@ -7,7 +7,7 @@ import datetime
 import multiprocessing
 
 from sqlite_access import *
-from utils import DNS_ADDRESS, getShaRepr, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay, in_between
+from utils import DNS_ADDRESS, getShaRepr, send_to, receive_from, send_and_wait_for_answer, get_dns_address, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay, in_between
 from chordReference import ChordNodeReference
 from fingerTable import FingerTable
 from succ_list import SuccList
@@ -105,18 +105,23 @@ class DataBaseNode:
         received = receive_from(connection, 3)
         if len(received) == 0:
             print("Failed request, data not received") 
-            im_conn = send_ping_to(DNS_ADDRESS)
+            dns_address = get_dns_address()
+            im_conn = send_ping_to(dns_address) 
             if not im_conn:
                 connection.close()
                 raise ConnectionError("I'm falling down")
         try:
             decoded = pickle.loads(received)
-
+            if decoded[0] == "DNS":
+                connection.close()
+                return status
+                
             if self.requests.get(decoded[0]):
                 function_to_answer = self.requests.get(decoded[0])
                 status = function_to_answer(decoded[1], connection, address)
                 if not status:
-                    im_conn = send_ping_to(DNS_ADDRESS)
+                    dns_address = get_dns_address()
+                    im_conn = send_ping_to(dns_address) 
                     if not im_conn:
                         raise ConnectionError("I'm falling down")
 
@@ -472,6 +477,7 @@ class DataBaseNode:
             all_players = read_data(self.db_path, query)
 
         answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended, all_matches, all_players), self.address])
+        print((tournament_id, tournament_type, ended, all_matches, all_players))
         all_good = send_to(answer, connection)
         return all_good
 
@@ -557,7 +563,8 @@ class DataBaseNode:
             except Exception as e:
                 if pred_data:
                     tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players = pred_data
-                    self.insert_data(tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players)
+                    if tournaments:
+                        self.insert_data(tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players)
                     pred_data = None
                 try:
                     socket.setdefaulttimeout(10) 
@@ -566,7 +573,8 @@ class DataBaseNode:
                     pred_pred = None
                     if pred_pred_data:
                         tournaments_pred, all_KnockoutMatches_pred, all_FreeForAllMatches_pred, all_players_pred = pred_pred_data
-                        self.insert_data(tournaments_pred, all_KnockoutMatches_pred, all_FreeForAllMatches_pred, all_players_pred)
+                        if tournaments_pred:
+                            self.insert_data(tournaments_pred, all_KnockoutMatches_pred, all_FreeForAllMatches_pred, all_players_pred)
                         pred_pred_data = None
                 self.pred = None
                 pred_pred = None

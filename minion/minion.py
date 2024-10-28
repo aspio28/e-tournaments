@@ -4,7 +4,7 @@ import dill as pickle
 import multiprocessing
 import os
 from TicTacToe import *
-from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
+from utils import send_to, receive_from, send_and_wait_for_answer, get_dns_address, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
            
 def get_players_instances(player_ids, tournament_id, address):
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
@@ -30,7 +30,8 @@ def get_players_instances(player_ids, tournament_id, address):
             except Exception as err:
                 print(err, ". Failed retry after timeout") 
         if len(data) == 0:
-            im_conn = send_ping_to(DNS_ADDRESS)
+            dns_address = get_dns_address()
+            im_conn = send_ping_to(dns_address) 
             if not im_conn:
                 raise ConnectionError("I'm falling down")
         
@@ -88,12 +89,16 @@ class MinionNode:
         received = receive_from(connection, 3)
         if len(received) == 0:
             print("Failed request, data not received") 
-            im_conn = send_ping_to(DNS_ADDRESS)
+            dns_address = get_dns_address()
+            im_conn = send_ping_to(dns_address) 
             if not im_conn:
                 connection.close()
                 raise ConnectionError("I'm falling down")
         try:
             decoded = pickle.loads(received)
+            if decoded[0] == "DNS":
+                connection.close()
+                return status
             if self.requests.get(decoded[0]):
                 function_to_answer = self.requests.get(decoded[0])
                 status = function_to_answer(decoded[1], connection, address)

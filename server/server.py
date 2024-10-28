@@ -3,7 +3,7 @@ import socket
 import time
 import multiprocessing
 from TournamentsLogic import *
-from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
+from utils import send_to, receive_from, send_and_wait_for_answer, get_dns_address, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
 import os
 
 tournaments_type = {'Knockout': KnockoutTournament,
@@ -64,13 +64,17 @@ class ServerNode:
         received = receive_from(connection, 3)
         if len(received) == 0:
             print("Failed request, data not received") 
-            im_conn = send_ping_to(DNS_ADDRESS)
+            dns_address = get_dns_address()
+            im_conn = send_ping_to(dns_address) 
             if not im_conn:
                 connection.close()
                 raise ConnectionError("I'm falling down")
             
         try:
             decoded = pickle.loads(received)
+            if decoded[0] == "DNS":
+                connection.close()
+                return status
             if self.requests.get(decoded[0]):
                 function_to_answer = self.requests.get(decoded[0])
                 status = function_to_answer(decoded[1], connection, address)
@@ -142,7 +146,8 @@ class ServerNode:
                 minion_nodes = get_from_dns('Minion')
                 all_good, data = self.retry_after_timeout(request, minion_nodes)
                 if not all_good:
-                    im_conn = send_ping_to(DNS_ADDRESS)
+                    dns_address = get_dns_address()
+                    im_conn = send_ping_to(dns_address) 
                     if not im_conn:
                         raise ConnectionError("I'm falling down")
 
@@ -165,7 +170,8 @@ class ServerNode:
             data_nodes = get_from_dns('DataBase')
             all_good, data = self.retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
 
@@ -183,7 +189,8 @@ class ServerNode:
         all_good = send_to(request, connection)
         
         if not all_good:
-            im_conn = send_ping_to(DNS_ADDRESS)
+            dns_address = get_dns_address()
+            im_conn = send_ping_to(dns_address) 
             if not im_conn:
                 raise ConnectionError("I'm falling down")
         
@@ -211,7 +218,8 @@ class ServerNode:
             data_nodes = get_from_dns('DataBase')
             all_good, data = self.retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
         print(pickle.loads(data)[1])

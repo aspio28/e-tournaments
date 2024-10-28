@@ -4,7 +4,7 @@ import random, time
 import pickle
 import socket
 import copy
-from utils import DNS_ADDRESS, send_to, receive_from, send_and_wait_for_answer, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
+from utils import send_to, receive_from, send_and_wait_for_answer, get_dns_address, get_from_dns, send_addr_to_dns, send_ping_to, send_echo_replay 
 
 def retry_after_timeout(request, addresses):
     for addr in addresses:
@@ -72,7 +72,8 @@ class KnockoutMatch(Match):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
         
@@ -95,7 +96,8 @@ class KnockoutMatch(Match):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -131,7 +133,8 @@ class FreeForAllMatch(Match):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -151,7 +154,8 @@ class FreeForAllMatch(Match):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -273,7 +277,8 @@ class KnockoutTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -328,7 +333,8 @@ class KnockoutTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -349,7 +355,8 @@ class KnockoutTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -453,7 +460,8 @@ class KnockoutTournament(Tournament):
                 data_nodes = get_from_dns('DataBase')
                 all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
                 
@@ -505,7 +513,8 @@ class FreeForAllTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -540,7 +549,8 @@ class FreeForAllTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -561,7 +571,8 @@ class FreeForAllTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
@@ -616,7 +627,8 @@ class FreeForAllTournament(Tournament):
             data_nodes = get_from_dns('DataBase')
             all_good, data = retry_after_timeout(request, data_nodes)
             if not all_good:
-                im_conn = send_ping_to(DNS_ADDRESS)
+                dns_address = get_dns_address()
+                im_conn = send_ping_to(dns_address) 
                 if not im_conn:
                     raise ConnectionError("I'm falling down")
             
