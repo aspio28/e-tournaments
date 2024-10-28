@@ -55,12 +55,27 @@ class DataBaseNode:
                         'ping_ring': self.ping,
                         'get_data': self.get_data,
                         'delete_data': self.delete_data,
+                        'Failed': None,
+                        'GET': self.get_domain, 
+                        'POST': self.add_domain,
                         }
         
         self.address = (self.ip, self.port)
         self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.serverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.serverSocket.bind(self.address)
+
+        current_dir = os.path.abspath(os.path.dirname(__file__))
+        self.address_log = os.path.join(current_dir, 'address_log.bin')
+        
+        # Restart or create adresses log
+        logs = {'DataBase':[], 'Minion':[], 'Server':[]}
+        with open(self.address_log, 'wb') as f:
+            pickle.dump(logs, f)
+
+        threading.Thread(target=self.check_ttl, daemon=True).start()
+        
+        threading.Thread(target=self.receive_broadcast, daemon=True).start()
 
         threading.Thread(target=self.stabilize, daemon=True).start()
         threading.Thread(target=self.check_predecessor, daemon=True).start()  
@@ -105,11 +120,8 @@ class DataBaseNode:
         received = receive_from(connection, 3)
         if len(received) == 0:
             print("Failed request, data not received") 
-            dns_address = get_dns_address()
-            im_conn = send_ping_to(dns_address) 
-            if not im_conn:
-                connection.close()
-                raise ConnectionError("I'm falling down")
+            connection.close()
+            return status
         try:
             decoded = pickle.loads(received)
             if decoded[0] == "DNS":
@@ -119,11 +131,6 @@ class DataBaseNode:
             if self.requests.get(decoded[0]):
                 function_to_answer = self.requests.get(decoded[0])
                 status = function_to_answer(decoded[1], connection, address)
-                if not status:
-                    dns_address = get_dns_address()
-                    im_conn = send_ping_to(dns_address) 
-                    if not im_conn:
-                        raise ConnectionError("I'm falling down")
 
         except Exception as err:
             if str(err) =="I'm falling down":
@@ -137,6 +144,106 @@ class DataBaseNode:
             connection.close()
         return status
     
+    def receive_broadcast(self):
+        while True:
+            try:
+                broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) 
+                broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                broadcast_sock.bind(('', 6000))
+                print("DNS server listening for broadcast messages...")
+                while True:
+                    data, client_address = broadcast_sock.recvfrom(1024)
+                    request = pickle.loads(data)
+                    if request[0] == "DNS":
+                        print(f"Received discovery message from {client_address[0]}")
+                        
+                        # Respond with this server's IP address
+                        response = b"DNS_SERVER_IP"
+                        response = pickle.dumps(["DNS_ADDR", self.address])
+                        broadcast_sock.sendto(response, client_address)
+            except Exception as e:
+                print(f"Error in Receive Broadcast: {e}")
+                broadcast_sock.close()
+
+            time.sleep(3)
+        
+    def check_ttl(self):
+        while True:
+            try:
+                with open(self.address_log, 'rb') as f:
+                    logs = pickle.load(f)
+                
+                for domain, records in logs.items():
+                    for record in records:
+                        if time.time() >= record['added_at'] + record['ttl']:
+                            # Check TTL
+                            if send_ping_to(record['data']):
+                                #TODO Maybe add a print here
+                                # Update added_at if ping is successful
+                                record['added_at'] = time.time()
+                            else:
+                                # Remove record if ping fails
+                                logs[domain].remove(record)
+                                print(f"Removed record for {record['data']} from domain {domain} due to failed ping.")
+
+                # Save updated logs
+                with open(self.address_log, 'wb') as f:
+                    pickle.dump(logs, f)
+
+            except Exception as e:
+                print(f"Error in TTL checker: {e}")
+
+            time.sleep(5)  # Check every 5 seconds
+            
+    def get_domain(self, arguments: tuple, connection, address):
+        with open(self.address_log, 'rb') as f:
+            logs = pickle.load(f)
+        domain = arguments[0]
+        records = logs[domain]
+        addresses = [ r['data'] for r in records ]
+        addresses = list(set(addresses)) # randomize 
+        
+        answer = pickle.dumps(['sent_addr', addresses, self.address])
+        all_good = send_to(answer, connection)
+        return all_good
+    
+    def add_domain(self, arguments: tuple, connection, address):
+        domain, new_address, ttl = arguments
+
+        key_hash = getShaRepr(new_address)
+        node = self.finger.find_succ(key_hash)
+
+        if(node.id != self.id):
+            node.add_domain(domain, new_address, ttl)
+
+        else:
+            new_record = {'domain': domain, 'ttl': ttl, 'data': new_address, 'added_at': time.time()}
+            
+            try:
+                with open(self.address_log, 'rb') as f:
+                    logs = pickle.load(f)
+                    
+                # Check if a record with the same IP already exists
+                for record in logs[domain]:
+                    if record['data'] == new_address:
+                        record['ttl'] = ttl
+                        record['added_at'] = time.time()
+                        print(f"Updated TTL and added_at for existing record with IP {new_address} in domain {domain}")
+                        with open(self.address_log, 'wb') as f:
+                            pickle.dump(logs, f)
+                        return True
+                
+                logs[domain].append(new_record)
+                print(f"Added new record with IP {new_address} in domain {domain}")
+                with open(self.address_log, 'wb') as f:
+                    pickle.dump(logs, f)
+                return True
+            except FileNotFoundError:
+                print("DNS error. Logs not found")
+                return False
+
+        return True
+
     def check_abandoned_tournaments(self):
         while True:
             try:

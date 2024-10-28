@@ -119,6 +119,12 @@ class ChordNodeReference:
         request = pickle.dumps(['delete_data', (node_id)])
         self._send_data(request)
         
+    def add_domain(self, domain, new_address, ttl):
+        request = pickle.dumps(['add_domain', (domain, new_address, ttl)])
+        data = self._send_data(request)
+        response = pickle.loads(data)[1]
+        return response
+    
 
     def ping(self):
         request = pickle.dumps(['ping_ring', (None,)])
