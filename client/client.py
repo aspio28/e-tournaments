@@ -109,7 +109,7 @@ class ClientNode:
         print(f"Requesting for a new {type_of_tournament} tournament to be created")
         request = pickle.dumps(['new_tournament', (type_of_tournament, list_of_players, tournament_name)])
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(4)
+        sock.settimeout(10)
         sock.connect(server_address)
         all_good, data = send_and_wait_for_answer(request, sock, 10)
         sock.close()
@@ -127,7 +127,7 @@ class ClientNode:
         server_address = self._get_server_node_addr()
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(4)
+        sock.settimeout(10)
         sock.connect(server_address)
         
         print(f"Requesting the status of the tournament {tournament_name}")#['tournament_status', (tournament_id,)]

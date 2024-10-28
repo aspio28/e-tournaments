@@ -159,7 +159,50 @@ def read_data(data_base_file_path:str, query:str="SELECT * from songs"):
             connection.close()
             # print("sqlite connection is closed")
     return record
-            
+
+def exist_table(data_base_file_path:str, table_name:str):
+    try:
+        conn = sqlite3.connect(data_base_file_path)
+        cursor = conn.cursor()
+
+        # Consulta para comprobar si la tabla existe
+        query = f'''
+        SELECT COUNT(*) 
+        FROM sqlite_master 
+        WHERE type='table' AND name='{table_name}';
+        '''
+
+        cursor.execute(query)
+        existe = cursor.fetchone()[0]
+        cursor.close()
+
+        if existe:
+            return True
+        else:
+            return False
+
+    except sqlite3.Error as error:
+        print("Failed to read data from sqlite table:", error)
+    finally:
+        if conn:
+            conn.close()
+
+def delete_row(data_base_file_path:str, query:str):
+    try:
+        # Conectar a la base de datos
+        conn = sqlite3.connect(data_base_file_path)
+        cursor = conn.cursor()
+
+        cursor.execute(query)
+        conn.commit() 
+        cursor.close()
+
+    except sqlite3.Error as error:
+        print("Failed to read data from sqlite table:", error)
+    finally:
+        if conn:
+            conn.close()
+
 def get_all_info(data_base_file_path:str):
     try:
         connection = sqlite3.connect(data_base_file_path)

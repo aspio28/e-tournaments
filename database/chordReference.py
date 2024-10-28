@@ -1,7 +1,7 @@
 import socket
 import pickle
 
-from utils import getShaRepr
+from utils import getShaRepr, send_to
 
 class ChordNodeReference:
     def __init__(self, ip: str, port: int = 8040):
@@ -15,11 +15,10 @@ class ChordNodeReference:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect((self.ip, self.port))
                 s.sendall(data)
-                return s.recv(2*1024)
+                return s.recv(1024000)
         except Exception as e:
             print(f"Error sending data: {e}")
             return b''
-
     
     def find_successor(self, id: int) -> 'ChordNodeReference':
         request = pickle.dumps(['find_successor', (str(id))])
@@ -107,8 +106,21 @@ class ChordNodeReference:
         request = pickle.dumps(['get_tournament_status', (tournament_id, )])
         data = self._send_data(request)
         response = pickle.loads(data)[1]
-        print(response)
         return response
+
+    def get_data(self, node_id):
+        print(1)
+        request = pickle.dumps(['get_data', (node_id)])
+        print(2)
+        data = self._send_data(request)
+        print(len(data))
+        response = pickle.loads(data)[1]
+        return response
+    
+    def delete_data(self, node_id):
+        request = pickle.dumps(['delete_data', (node_id)])
+        self._send_data(request)
+        
 
     def ping(self):
         request = pickle.dumps(['ping_ring', (None,)])

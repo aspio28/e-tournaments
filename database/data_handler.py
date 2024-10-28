@@ -52,7 +52,9 @@ class DataBaseNode:
                         'closest_preceding_finger': self.finger.closest_preceding_finger,
                         'check_predecessor': self.check_predecessor,
                         'notify': self.notify,
-                        'ping_ring': self.ping
+                        'ping_ring': self.ping,
+                        'get_data': self.get_data,
+                        'delete_data': self.delete_data,
                         }
         
         self.address = (self.ip, self.port)
@@ -470,7 +472,6 @@ class DataBaseNode:
             all_players = read_data(self.db_path, query)
 
         answer = pickle.dumps(['tournament_status', (tournament_id, tournament_type, ended, all_matches, all_players), self.address])
-        print((tournament_id, tournament_type, ended, all_matches, all_players))
         all_good = send_to(answer, connection)
         return all_good
 
@@ -481,6 +482,11 @@ class DataBaseNode:
             self.succ = node.find_successor(self.id)
             self.pred = self.succ.pred
             self.succ.notify(self.ref)
+            tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players = self.succ.get_data(self.id)
+
+            if tournaments:
+                self.insert_data(tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players)
+                self.succ.delete_data(self.id)
         else:
             self.succ = self.ref
             self.pred = None
@@ -495,6 +501,9 @@ class DataBaseNode:
                 except Exception as e:
                     print(f"Error selecting new successor")
 
+                if len(self.successors.list) == 0:
+                    self.succ = self.ref
+                    
                 if self.succ.id != self.id:
                     print('stabilize')
                     print(self.successors.list)
@@ -522,13 +531,46 @@ class DataBaseNode:
         return all_good
 
     def check_predecessor(self, arguments=None, connection=None, address=None):
+        pred_data = None
+        pred_pred = None
+        pred_pred_data = None
+
         while True:
             try:
                 if self.pred:
                     socket.setdefaulttimeout(10) 
                     ok = self.pred.ping()
+
+                    if ok:
+                        pred_data = self.pred.get_data(999999999999999999999999999999999999999999999999)
+                        print('Predecessor data recived')
+                        pred_pred = self.pred.pred
+
+                        if pred_pred.id != self.id:
+                            try:
+                                socket.setdefaulttimeout(10)
+                                ok_pred = pred_pred.ping()
+                                if ok:
+                                    pred_pred_data = pred_pred.get_data(pred_pred.id)
+                            except Exception as e:
+                                pass
             except Exception as e:
+                if pred_data:
+                    tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players = pred_data
+                    self.insert_data(tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players)
+                    pred_data = None
+                try:
+                    socket.setdefaulttimeout(10) 
+                    ok = pred_pred.ping()
+                except Exception as e:
+                    pred_pred = None
+                    if pred_pred_data:
+                        tournaments_pred, all_KnockoutMatches_pred, all_FreeForAllMatches_pred, all_players_pred = pred_pred_data
+                        self.insert_data(tournaments_pred, all_KnockoutMatches_pred, all_FreeForAllMatches_pred, all_players_pred)
+                        pred_pred_data = None
                 self.pred = None
+                pred_pred = None
+
             finally:
                 socket.setdefaulttimeout(None)  
             time.sleep(10)
@@ -536,7 +578,7 @@ class DataBaseNode:
     def get_succ(self, arguments=None, connection=None, address=None):
         succ = self.succ if self.succ else self.ref
         if connection:
-            answer = pickle.dumps(['got_successor', (succ.id, succ.ip)])
+            answer = pickle.dumps(['get_successor', (succ.id, succ.ip)])
             all_good = send_to(answer, connection)
             return all_good
         else:
@@ -545,7 +587,7 @@ class DataBaseNode:
     def get_pred(self, arguments=None, connection=None, address=None):
         pred = self.pred if self.pred else self.ref
         if connection:
-            answer = pickle.dumps(['got_predecessor', (pred.id, pred.ip)])
+            answer = pickle.dumps(['get_predecessor', (pred.id, pred.ip)])
             all_good = send_to(answer, connection)
             return all_good
         else:
@@ -557,6 +599,123 @@ class DataBaseNode:
 
         return all_good
     
+    def get_data(self, node_id, connection=None, address=None):
+
+        tournaments = None
+        all_FreeForAllMatches = None
+        all_KnockoutMatches = None
+        all_players = None
+
+        if exist_table(self.db_path, 'tournaments'):
+            # Load from tournaments table
+            query = f'''SELECT *
+            FROM tournaments
+            WHERE id < '{node_id}' '''
+
+            tournaments = read_data(self.db_path, query)
+
+        if exist_table(self.db_path, 'KnockoutMatches'):
+            query = f'''SELECT *
+            FROM KnockoutMatches
+            WHERE tournament_id < '{node_id}' '''      
+            all_KnockoutMatches = read_data(self.db_path, query)
+
+        if exist_table(self.db_path, 'FreeForAllMatches'):
+            query = f'''SELECT *
+            FROM FreeForAllMatches
+            WHERE tournament_id < '{node_id}' ''' 
+            all_FreeForAllMatches = read_data(self.db_path, query)
+        
+        if exist_table(self.db_path, 'participants'):
+            query = f'''SELECT *
+                FROM participants
+                WHERE tournament_id < '{node_id}' '''
+            all_players = read_data(self.db_path, query)
+
+        answer = pickle.dumps(['get_data', (tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players), self.address])
+        all_good = send_to(answer, connection)
+        return all_good
+
+    def insert_data(self, tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players):
+
+        tournaments_columns = ['id TEXT PRIMARY KEY', 'tournament_name TEXT NOT NULL', 'tournament_type TEXT NOT NULL', 'ended BOOLEAN NOT NULL', 'last_update DATETIME'] 
+        create_table(self.db_path, 'tournaments', tournaments_columns)
+        
+        for tournament in tournaments:
+            insert_rows(self.db_path, 'tournaments', 'id, tournament_name, tournament_type, ended, last_update', (tournament,))
+            
+        participants_columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'name TEXT NOT NULL', 'player_code BLOB NOT NULL', 'tournament_id TEXT', 'FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE']
+        create_table(self.db_path, 'participants', participants_columns)
+        
+        for players in all_players: 
+            insert_rows(self.db_path, 'participants', 'id, name, player_code, tournament_id', (players,)) 
+        
+        if all_KnockoutMatches:
+            matches_columns = [
+                'id INTEGER NOT NULL',
+                'tournament_id TEXT NOT NULL',
+                'required TEXT NOT NULL',
+                'ended BOOLEAN NOT NULL',
+                'player1 INTEGER',
+                'player2 INTEGER',
+                'winner INTEGER',
+                'PRIMARY KEY (id, tournament_id)',
+                'FOREIGN KEY (tournament_id) REFERENCES tournaments (tournament_id)'
+            ] 
+            create_table(self.db_path, 'KnockoutMatches', matches_columns)
+
+            for match in all_KnockoutMatches:   
+                insert_rows(self.db_path, 'KnockoutMatches', 'id, tournament_id, required, ended, player1, player2, winner', (match,)) 
+        
+        if all_FreeForAllMatches:
+            matches_columns = [
+                'id INTEGER NOT NULL',
+                'tournament_id TEXT NOT NULL',
+                'ended BOOLEAN NOT NULL',
+                'player1 INTEGER',
+                'player2 INTEGER',
+                'winner INTEGER',
+                'PRIMARY KEY (id, tournament_id)',
+                'FOREIGN KEY (tournament_id) REFERENCES tournaments (tournament_id)'
+            ]
+            create_table(self.db_path, 'FreeForAllMatches', matches_columns)  
+
+            for match in all_FreeForAllMatches: 
+                insert_rows(self.db_path, 'FreeForAllMatches', 'id, tournament_id, ended, player1, player2, winner', (match,))
+        
+        print('Data has been obtained satisfactorily')
+
+    def delete_data(self, node_id, connection=None, address=None):
+
+        if exist_table(self.db_path, 'tournaments'):
+            query = f'''DELETE
+            FROM tournaments
+            WHERE id < '{node_id}' '''
+
+            delete_row(self.db_path, query)
+
+        if exist_table(self.db_path, 'KnockoutMatches'):
+            query = f'''DELETE
+            FROM KnockoutMatches
+            WHERE tournament_id < '{node_id}' '''      
+            
+            delete_row(self.db_path, query)
+
+        if exist_table(self.db_path, 'FreeForAllMatches'):
+            query = f'''DELETE
+            FROM FreeForAllMatches
+            WHERE tournament_id < '{node_id}' ''' 
+            
+            delete_row(self.db_path, query)
+        
+        if exist_table(self.db_path, 'participants'):
+            query = f'''DELETE
+                FROM participants
+                WHERE tournament_id < '{node_id}' '''
+            
+            delete_row(self.db_path, query)
+    
+
 node = DataBaseNode()
 ip_node_in_chord = os.getenv('NODE_IN_RED')
 
