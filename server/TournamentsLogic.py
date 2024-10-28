@@ -65,7 +65,6 @@ class KnockoutMatch(Match):
     def match_from_db(t_id, m_id, address):
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         sock.connect(address) # TODO
-        
         request = pickle.dumps(['get_match', ('KnockoutMatches', t_id, m_id)])
         all_good, data = send_and_wait_for_answer(request, sock, 4) # [(7, 6, '', 0, 24, 21)]
         sock.close()
@@ -236,10 +235,11 @@ class Tournament(ABC):
 
 class KnockoutTournament(Tournament):
     
-    def __init__(self, start:bool, id:int=None, players:list=None):
+    def __init__(self, start:bool, id:int=None, players:list=None, tournament_name:str= None):
         if start:
             if players == None:
                 raise Exception("A tournament to be created needs a players list")
+            self.tournament_name = tournament_name
             self.insert_tournament_to_db(players)
             self.players_list = copy.deepcopy(self.players_ids)
             # random.shuffle(self.players_list)
@@ -248,12 +248,13 @@ class KnockoutTournament(Tournament):
         else:
             if id == None:
                 raise Exception("A tournament that is not beginning now must recieve id")
+            self.tournament_name = tournament_name
             self.id = id
             self.load_tournament_from_id()
             self.players_list = copy.deepcopy(self.players_ids)
             self.load_matches_from_db()
             self.ended = self.last_match.ended
-
+        
     def tournament_type(self):
         return "Knockout"
     
@@ -265,7 +266,7 @@ class KnockoutTournament(Tournament):
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         sock.connect(self.get_data_node_addr()) # TODO
 
-        request = pickle.dumps(['insert_tournament', (self.tournament_type(), players)])
+        request = pickle.dumps(['insert_tournament', (self.tournament_type(), players, self.tournament_name)])
         all_good, data = send_and_wait_for_answer(request, sock, 5)
         sock.close()
         if len(data) == 0:              
@@ -277,7 +278,6 @@ class KnockoutTournament(Tournament):
                     raise ConnectionError("I'm falling down")
             
         answer = pickle.loads(data) 
-        print(answer)
         self.id = answer[1][0]
         self.players_ids = answer[1][1]
         return all_good
@@ -382,10 +382,8 @@ class KnockoutTournament(Tournament):
         return self._find_not_ended(self.last_match)
     
     def _find_not_ended(self, root:KnockoutMatch):
-            
         queue = deque([(root, 0)])  # Queue for BFS, storing (match, level)
         levels = {}  # To track matches at each level
-
         while queue:
             current_match, level = queue.popleft()
 
@@ -393,12 +391,12 @@ class KnockoutTournament(Tournament):
             if level not in levels:
                 levels[level] = []
             levels[level].append(current_match)
-
+            
             # Add child matches to the queue if they exist
             if len(current_match.required) == 2:
                 queue.append((KnockoutMatch.match_from_db(self.id, current_match.required[0], self.get_data_node_addr()), level + 1))
                 queue.append((KnockoutMatch.match_from_db(self.id, current_match.required[1], self.get_data_node_addr()), level + 1))
-
+         
         # Now check each level from the highest to the lowest
         last_level = []
         sorted_levels = sorted(levels.keys(), reverse=False) # [0, 1, 2, ...]
@@ -421,7 +419,6 @@ class KnockoutTournament(Tournament):
                 
             if ended_matches and non_ended_matches:
                 return non_ended_matches[0]
-
         return None
     
     def next_match(self):
@@ -448,9 +445,8 @@ class KnockoutTournament(Tournament):
         self.ended = self.last_match.ended
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         sock.connect(self.get_data_node_addr())
-    
         if self.ended:
-            request = pickle.dumps(['save_tournament', (self.id, self.tournament_type(), self.ended)])
+            request = pickle.dumps(['save_tournament', (self.id, self.tournament_name, self.tournament_type(), self.ended)])
             all_good, data = send_and_wait_for_answer(request, sock, 4)
             sock.close()
             if len(data) == 0:              
@@ -468,11 +464,12 @@ class KnockoutTournament(Tournament):
 
 class FreeForAllTournament(Tournament):
     
-    def __init__(self, start:bool, id:int=None, players:list=None):
+    def __init__(self, start:bool, id:int=None, players:list=None, tournament_name:str= None):
         self.data_nodes = get_from_dns('DataBase')
         if start:
             if players == None:
                 raise Exception("A tournament to be created needs a players list")
+            self.tournament_name = tournament_name
             self.insert_tournament_to_db(players)
             self.players_list = copy.deepcopy(self.players_ids)
             # random.shuffle(self.players_list)
@@ -481,6 +478,7 @@ class FreeForAllTournament(Tournament):
         else:
             if id == None:
                 raise Exception("A tournament that is not beginning now must recieve id")
+            self.tournament_name = tournament_name
             self.id = id
             self.load_tournament_from_id()
             self.players_list = copy.deepcopy(self.players_ids)
@@ -500,7 +498,7 @@ class FreeForAllTournament(Tournament):
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         sock.connect(self.get_data_node_addr()) # TODO
 
-        request = pickle.dumps(['insert_tournament', (self.tournament_type(), players)])
+        request = pickle.dumps(['insert_tournament', (self.tournament_type(), players, self.tournament_name)])
         all_good, data = send_and_wait_for_answer(request, sock, 5)
         sock.close()
         if len(data) == 0:              
@@ -512,7 +510,6 @@ class FreeForAllTournament(Tournament):
                     raise ConnectionError("I'm falling down")
             
         answer = pickle.loads(data) 
-        print(answer)
         self.id = answer[1][0]
         self.players_ids = answer[1][1]
         return all_good
@@ -612,7 +609,7 @@ class FreeForAllTournament(Tournament):
         print("Ended tournament")
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         sock.connect(self.get_data_node_addr()) 
-        request = pickle.dumps(['save_tournament', (self.id, self.tournament_type(), self.ended)])
+        request = pickle.dumps(['save_tournament', (self.id, self.tournament_name, self.tournament_type(), self.ended)])
         all_good, data = send_and_wait_for_answer(request, sock, 4)
         sock.close()
         if len(data) == 0:              

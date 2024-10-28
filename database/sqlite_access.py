@@ -69,7 +69,7 @@ def create_table(data_base_file_path:str, table_name:str, columns_list:list):
             connection.close()
             # print("sqlite connection is closed")
 
-def insert_rows(data_base_file_path:str, table_name:str, columns_names:str, row_tuples_tuple:tuple):
+def insert_rows(data_base_file_path:str, table_name:str, columns_names:str, row_tuples_tuple:tuple, with_autoincrement:bool=False):
     """ Insert one or more rows in the specified table, of the specified database.
     'columns_names' is a string of the name of the columns in the table, comma separated.
     'row_tuples_tuple' is a tuple with one or more elements, where each element is a tuple 
@@ -96,6 +96,7 @@ def insert_rows(data_base_file_path:str, table_name:str, columns_names:str, row_
         return False
 
     try:
+
         connection = sqlite3.connect(data_base_file_path)
         cursor = connection.cursor()
         # print("Connected to SQLite")
@@ -109,7 +110,10 @@ def insert_rows(data_base_file_path:str, table_name:str, columns_names:str, row_
         for row in row_tuples_tuple:
             insert = sqlite_query + value
             cursor.execute(insert, row)
-            ids.append(cursor.lastrowid)
+            if with_autoincrement:
+                ids.append(cursor.lastrowid)
+            else:
+                ids.append(row[0])
             # print(f"Last inserted ID: {ids[-1]}")
 
         connection.commit()
@@ -144,7 +148,6 @@ def read_data(data_base_file_path:str, query:str="SELECT * from songs"):
         connection = sqlite3.connect(data_base_file_path)
         cursor = connection.cursor()
         # print("Connected to SQLite")
-
         cursor.execute(query)
         record = cursor.fetchall()
         cursor.close()
@@ -156,6 +159,75 @@ def read_data(data_base_file_path:str, query:str="SELECT * from songs"):
             connection.close()
             # print("sqlite connection is closed")
     return record
-            
+
+def exist_table(data_base_file_path:str, table_name:str):
+    try:
+        conn = sqlite3.connect(data_base_file_path)
+        cursor = conn.cursor()
+
+        # Consulta para comprobar si la tabla existe
+        query = f'''
+        SELECT COUNT(*) 
+        FROM sqlite_master 
+        WHERE type='table' AND name='{table_name}';
+        '''
+
+        cursor.execute(query)
+        existe = cursor.fetchone()[0]
+        cursor.close()
+
+        if existe:
+            return True
+        else:
+            return False
+
+    except sqlite3.Error as error:
+        print("Failed to read data from sqlite table:", error)
+    finally:
+        if conn:
+            conn.close()
+
+def delete_row(data_base_file_path:str, query:str):
+    try:
+        # Conectar a la base de datos
+        conn = sqlite3.connect(data_base_file_path)
+        cursor = conn.cursor()
+
+        cursor.execute(query)
+        conn.commit() 
+        cursor.close()
+
+    except sqlite3.Error as error:
+        print("Failed to read data from sqlite table:", error)
+    finally:
+        if conn:
+            conn.close()
+
 def get_all_info(data_base_file_path:str):
-    pass
+    try:
+        connection = sqlite3.connect(data_base_file_path)
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tablas = cursor.fetchall()
+
+        datos_db = {}
+
+        for tabla in tablas:
+            nombre_tabla = tabla[0]
+            cursor.execute(f"SELECT * FROM {nombre_tabla}")
+            filas = cursor.fetchall()
+
+            cursor.execute(f"PRAGMA table_info({nombre_tabla});")
+            columnas = [columna[1] for columna in cursor.fetchall()]
+
+            datos_db[nombre_tabla] = [dict(zip(columnas, fila)) for fila in filas]
+
+    except sqlite3.Error as error:
+        print("Failed to obtain data from sqlite table:", error)
+    finally:
+        if connection:
+            connection.close()
+            # print("sqlite connection is closed")
+    
+    return datos_db

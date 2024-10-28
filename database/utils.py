@@ -7,7 +7,7 @@ import hashlib
 DNS_ADDRESS = ('172.30.0.250', 5353)
 
 def send_to(payload: bytes, connection: socket.socket):
-    buf_size = 2*1024
+    buf_size = 102400
     sleep_time = 3
     all_good = False
     # Sending attempts after a disconnection error
