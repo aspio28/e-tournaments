@@ -3,8 +3,6 @@ import time
 import pickle
 import multiprocessing
 
-DNS_ADDRESS = ('172.30.0.250', 5353)
-
 def send_to(payload: bytes, connection: socket.socket):
     buf_size = 2*1024
     sleep_time = 3
@@ -87,9 +85,36 @@ def send_and_wait_for_answer(payload: bytes, connection: socket.socket, wait_tim
     return False, None
 
 
+def get_dns_address(wait_time=5):    
+    broadcast_addrs = ('255.255.255.255', 6000)  # Broadcast address
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.settimeout(wait_time)  # Timeout if no response
+    
+    try:
+        print("Broadcasting message to locate DNS server...")
+        request = pickle.dumps(["DNS", ()])
+        sock.sendto(request, broadcast_addrs)
+        response, server_address = sock.recvfrom(1024)
+        print(f"DNS server found at IP address: {server_address[0]}")
+        result = pickle.loads(response)
+        print(f"DNS address received: {result}")
+        sock.close()
+        if result[0] == "DNS_ADDR":
+            return result[1]             
+    except socket.timeout:
+        print("No response received. DNS server not found.")
+        sock.close()
+        return None    
+    
 def get_from_dns(domain:str):
+    while True:
+        dns_address = get_dns_address()
+        if dns_address != None:
+            break
+        
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
-    sock.connect(DNS_ADDRESS)
+    sock.connect(dns_address)
     request = pickle.dumps(["GET", (domain,)])
     send_to(request, sock)
     data = receive_from(sock, 5)
@@ -101,8 +126,12 @@ def get_from_dns(domain:str):
         return result[1]
 
 def send_addr_to_dns(domain:str, address:tuple, ttl:int=60):
+    while True:
+        dns_address = get_dns_address()
+        if dns_address != None:
+            break
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
-    sock.connect(DNS_ADDRESS)
+    sock.connect(dns_address)
     request = pickle.dumps(['POST', (domain, address, ttl)]) 
     return send_to(request, sock)
     

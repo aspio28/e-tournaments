@@ -106,6 +106,7 @@ class ChordNodeReference:
         request = pickle.dumps(['get_tournament_status', (tournament_id, )])
         data = self._send_data(request)
         response = pickle.loads(data)[1]
+        print(response)
         return response
 
     def get_data(self, node_id):

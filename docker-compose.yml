@@ -11,6 +11,8 @@ services:
     tty: true
     volumes:
       - ./dns:/dns
+    environment:
+      - NODE_IP=172.30.0.250
 
   node_server1:
     image: server
