@@ -39,7 +39,12 @@ class SuccList:
                             try:
                                 ok = self.list[i].ping()
                             except:
-                                self.list.pop(i)
+                                try:
+                                    self.list.pop(i)
+                                    if len(self.list) == 0:
+                                        self.one_node = True
+                                except:
+                                    self.one_node = True
             time.sleep(10)
 
     def check_succ(self):

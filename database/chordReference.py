@@ -109,14 +109,15 @@ class ChordNodeReference:
         print(response)
         return response
 
-    def get_data(self, node_id):
-        request = pickle.dumps(['get_data', (node_id)])
+    def get_data(self, node_id, pred_id):
+        request = pickle.dumps(['get_data', (node_id, pred_id)])
         data = self._send_data(request)
+        print(len(data))
         response = pickle.loads(data)[1]
         return response
     
-    def delete_data(self, node_id):
-        request = pickle.dumps(['delete_data', (node_id)])
+    def delete_data(self, node_id, pred_id):
+        request = pickle.dumps(['delete_data', (node_id, pred_id)])
         self._send_data(request)
         
 

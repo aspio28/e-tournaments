@@ -239,7 +239,7 @@ What do you want to do?
             if all_good:
                 print(f"New {type_of_tournament} Tournament created: {tournament_name}")#######
                 self.tourn[tournament_name] = t_id
-                time.sleep(2)
+                time.sleep(10)
             else:
                 print("Failed create tournament request")
                 

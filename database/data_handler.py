@@ -488,11 +488,11 @@ class DataBaseNode:
             self.succ = node.find_successor(self.id)
             self.pred = self.succ.pred
             self.succ.notify(self.ref)
-            tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players = self.succ.get_data(self.id)
+            tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players = self.succ.get_data(self.id, self.pred.id)
 
             if tournaments:
                 self.insert_data(tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players)
-                self.succ.delete_data(self.id)
+                self.succ.delete_data(self.id, self.pred.id)
         else:
             self.succ = self.ref
             self.pred = None
@@ -548,8 +548,8 @@ class DataBaseNode:
                     ok = self.pred.ping()
 
                     if ok:
-                        pred_data = self.pred.get_data(999999999999999999999999999999999999999999999999)
-                        print('Predecessor data recived')
+                        pred_data = self.pred.get_data(999999999999999999999999999999999999999999999999, 0)
+                        print('===============================================Predecessor data recived===============================================')
                         pred_pred = self.pred.pred
 
                         if pred_pred.id != self.id:
@@ -557,7 +557,8 @@ class DataBaseNode:
                                 socket.setdefaulttimeout(10)
                                 ok_pred = pred_pred.ping()
                                 if ok:
-                                    pred_pred_data = pred_pred.get_data(pred_pred.id)
+                                    pred_pred_data = pred_pred.get_data(999999999999999999999999999999999999999999999999, 0)
+                                    print('==============================Predecessor to my predecessor data recived========================')
                             except Exception as e:
                                 pass
             except Exception as e:
@@ -607,40 +608,70 @@ class DataBaseNode:
 
         return all_good
     
-    def get_data(self, node_id, connection=None, address=None):
+    def get_data(self, arguments, connection=None, address=None):
+
+        node_id, pred_id = arguments
 
         tournaments = None
         all_FreeForAllMatches = None
         all_KnockoutMatches = None
         all_players = None
 
-        if exist_table(self.db_path, 'tournaments'):
-            # Load from tournaments table
-            query = f'''SELECT *
-            FROM tournaments
-            WHERE id < '{node_id}' '''
+        if str(pred_id) > str(node_id):
+            if exist_table(self.db_path, 'tournaments'):
+                # Load from tournaments table
+                query = f'''SELECT *
+                FROM tournaments
+                WHERE id > '{pred_id}' OR  id < '{node_id}' '''
 
-            tournaments = read_data(self.db_path, query)
+                tournaments = read_data(self.db_path, query)
 
-        if exist_table(self.db_path, 'KnockoutMatches'):
-            query = f'''SELECT *
-            FROM KnockoutMatches
-            WHERE tournament_id < '{node_id}' '''      
-            all_KnockoutMatches = read_data(self.db_path, query)
+            if exist_table(self.db_path, 'KnockoutMatches'):
+                query = f'''SELECT *
+                FROM KnockoutMatches
+                WHERE tournament_id > '{pred_id}' OR  tournament_id < '{node_id}' '''      
+                all_KnockoutMatches = read_data(self.db_path, query)
 
-        if exist_table(self.db_path, 'FreeForAllMatches'):
-            query = f'''SELECT *
-            FROM FreeForAllMatches
-            WHERE tournament_id < '{node_id}' ''' 
-            all_FreeForAllMatches = read_data(self.db_path, query)
-        
-        if exist_table(self.db_path, 'participants'):
-            query = f'''SELECT *
+            if exist_table(self.db_path, 'FreeForAllMatches'):
+                query = f'''SELECT *
+                FROM FreeForAllMatches
+                WHERE tournament_id > '{pred_id}' OR  tournament_id < '{node_id}' ''' 
+                all_FreeForAllMatches = read_data(self.db_path, query)
+            
+            if exist_table(self.db_path, 'participants'):
+                query = f'''SELECT *
                 FROM participants
-                WHERE tournament_id < '{node_id}' '''
-            all_players = read_data(self.db_path, query)
+                WHERE tournament_id > '{pred_id}' OR  tournament_id < '{node_id}' ''' 
+                all_players = read_data(self.db_path, query)
+        else:
+            if exist_table(self.db_path, 'tournaments'):
+                # Load from tournaments table
+                query = f'''SELECT *
+                FROM tournaments
+                WHERE id BETWEEN '{pred_id}' AND '{node_id}' '''
+
+                tournaments = read_data(self.db_path, query)
+
+            if exist_table(self.db_path, 'KnockoutMatches'):
+                query = f'''SELECT *
+                FROM KnockoutMatches
+                WHERE tournament_id BETWEEN '{pred_id}' AND '{node_id}' '''   
+                all_KnockoutMatches = read_data(self.db_path, query)
+
+            if exist_table(self.db_path, 'FreeForAllMatches'):
+                query = f'''SELECT *
+                FROM FreeForAllMatches
+                WHERE tournament_id BETWEEN '{pred_id}' AND '{node_id}' '''
+                all_FreeForAllMatches = read_data(self.db_path, query)
+            
+            if exist_table(self.db_path, 'participants'):
+                query = f'''SELECT *
+                FROM participants
+                WHERE tournament_id BETWEEN '{pred_id}' AND '{node_id}' '''
+                all_players = read_data(self.db_path, query)
 
         answer = pickle.dumps(['get_data', (tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players), self.address])
+        print(tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players)
         all_good = send_to(answer, connection)
         return all_good
 
@@ -693,36 +724,68 @@ class DataBaseNode:
         
         print('Data has been obtained satisfactorily')
 
-    def delete_data(self, node_id, connection=None, address=None):
-
-        if exist_table(self.db_path, 'tournaments'):
-            query = f'''DELETE
-            FROM tournaments
-            WHERE id < '{node_id}' '''
-
-            delete_row(self.db_path, query)
-
-        if exist_table(self.db_path, 'KnockoutMatches'):
-            query = f'''DELETE
-            FROM KnockoutMatches
-            WHERE tournament_id < '{node_id}' '''      
-            
-            delete_row(self.db_path, query)
-
-        if exist_table(self.db_path, 'FreeForAllMatches'):
-            query = f'''DELETE
-            FROM FreeForAllMatches
-            WHERE tournament_id < '{node_id}' ''' 
-            
-            delete_row(self.db_path, query)
+    def delete_data(self, arguments, connection=None, address=None):
         
-        if exist_table(self.db_path, 'participants'):
-            query = f'''DELETE
-                FROM participants
-                WHERE tournament_id < '{node_id}' '''
+        node_id, pred_id = arguments
+
+        if str(pred_id) > str(node_id):
+            if exist_table(self.db_path, 'tournaments'):
+                # Load from tournaments table
+                query = f'''DELETE
+                FROM tournaments
+                WHERE id > '{pred_id}' OR  id < '{node_id}' '''
+
+                delete_row(self.db_path, query)
+
+            if exist_table(self.db_path, 'KnockoutMatches'):
+                query = f'''DELETE
+                FROM KnockoutMatches
+                WHERE tournament_id > '{pred_id}' OR  tournament_id < '{node_id}' '''       
+                
+                delete_row(self.db_path, query)
+
+            if exist_table(self.db_path, 'FreeForAllMatches'):
+                query = f'''DELETE
+                FROM FreeForAllMatches
+                WHERE tournament_id > '{pred_id}' OR  tournament_id < '{node_id}' ''' 
+                
+                delete_row(self.db_path, query)
             
-            delete_row(self.db_path, query)
-    
+            if exist_table(self.db_path, 'participants'):
+                query = f'''DELETE
+                    FROM participants
+                    WHERE tournament_id > '{pred_id}' OR  tournament_id < '{node_id}' ''' 
+                
+                delete_row(self.db_path, query)
+        else:
+            if exist_table(self.db_path, 'tournaments'):
+                query = f'''DELETE
+                FROM tournaments
+                WHERE id < '{node_id}' '''
+
+                delete_row(self.db_path, query)
+
+            if exist_table(self.db_path, 'KnockoutMatches'):
+                query = f'''DELETE
+                FROM KnockoutMatches
+                WHERE tournament_id < '{node_id}' '''      
+                
+                delete_row(self.db_path, query)
+
+            if exist_table(self.db_path, 'FreeForAllMatches'):
+                query = f'''DELETE
+                FROM FreeForAllMatches
+                WHERE tournament_id < '{node_id}' ''' 
+                
+                delete_row(self.db_path, query)
+            
+            if exist_table(self.db_path, 'participants'):
+                query = f'''DELETE
+                    FROM participants
+                    WHERE tournament_id < '{node_id}' '''
+                
+                delete_row(self.db_path, query)
+        
 
 node = DataBaseNode()
 ip_node_in_chord = os.getenv('NODE_IN_RED')
