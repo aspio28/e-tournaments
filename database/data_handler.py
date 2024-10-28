@@ -563,7 +563,8 @@ class DataBaseNode:
             except Exception as e:
                 if pred_data:
                     tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players = pred_data
-                    self.insert_data(tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players)
+                    if tournaments:
+                        self.insert_data(tournaments, all_KnockoutMatches, all_FreeForAllMatches, all_players)
                     pred_data = None
                 try:
                     socket.setdefaulttimeout(10) 
@@ -572,7 +573,8 @@ class DataBaseNode:
                     pred_pred = None
                     if pred_pred_data:
                         tournaments_pred, all_KnockoutMatches_pred, all_FreeForAllMatches_pred, all_players_pred = pred_pred_data
-                        self.insert_data(tournaments_pred, all_KnockoutMatches_pred, all_FreeForAllMatches_pred, all_players_pred)
+                        if tournaments_pred:
+                            self.insert_data(tournaments_pred, all_KnockoutMatches_pred, all_FreeForAllMatches_pred, all_players_pred)
                         pred_pred_data = None
                 self.pred = None
                 pred_pred = None
